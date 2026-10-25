@@ -139,7 +139,7 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **Motion** | While Claude works, a new or changed part lights up briefly, numbers count up, bars fill smoothly, and ◆ beats. |
 | **Model** | Switches Claude's model. A pick made while Claude works applies when it finishes. |
 | **Effort** | How hard Claude thinks. Grayed out on models that don't use it. |
-| **Color** | This project's color, marked ✓, on its name in the strip and on tabs **New tab** opens. Each project gets one on its own, the one fewest projects have; press a swatch to change it. Other tabs open in this project change when they restart. Shows only in a project folder. |
+| **Color** | This project's color, marked ✓, on its name in the strip and on tabs **New tab** opens. Each project gets one on its own, the one fewest projects have; press a swatch to change it. Other tabs open in this project change when they restart. Outside a project folder, it's the color of the folder Claude Code started in. |
 | **Helper agents** | Which model helper agents run on. Each press of its pill moves to the next: **Lowest that fits** lets Claude pick per task, **Fast & Cheap** uses Haiku, and **Same as me** uses Claude's own model. |
 | **Clean View** | Hides tool output (reads, edits, and commands), so Claude's words stand out. Questions and plans for your OK stay. The work view above the strip shows either way. |
 | **On / Off pills** | Press the pill at the right of a setting to switch it. The dot beside the setting turns green while it's on. |
@@ -204,7 +204,7 @@ const FAILED_KEPT = 3
 const COMMAND_KEPT = 200
 const WORK_COLUMN = 32
 // The rows the controls box takes when open: its border, title, divider, Model, Effort, two settings under their rule,
-// three Launch rows under theirs, and the version row. In a project folder, the Color row adds one.
+// three Launch rows under theirs, and the version row. Once the folder check has run, the Color row adds one.
 const CONTROLS_ROWS = 14
 // How a finished helper's line is marked: done, stopped, or failed.
 const endMark = (a: ToolkitAgent) =>
@@ -1372,7 +1372,7 @@ async function needsYou($: EngineInterface, text: string) {
   let title = ALERT_TITLE
   try {
     const project = await read($, projectA)
-    if (project != null) title = `${project.name} needs you`
+    if (project != null && project.isOutside !== true) title = `${project.name} needs you`
   } catch {}
   try {
     const r = await $.ui.notify(text, { title })
@@ -1423,17 +1423,19 @@ async function checkFolder($: EngineInterface) {
     const folder = dir !== null ? null : await $.session.cwd()
     await update($, folderWarningA, () => folder)
     if (folder !== null) $.ui.toast(folderText(folder))
+    // Outside a project folder, the folder Claude Code started in still gets a name and color.
     if (dir !== null) await noteProject($, dir)
+    else if (folder !== null) await noteProject($, folder, true)
   } catch {}
 }
 
 // Gives the strip and New tab the project's color, picking one the first time the toolkit sees the project.
-async function noteProject($: EngineInterface, dir: string) {
+async function noteProject($: EngineInterface, dir: string, isOutside = false) {
   const all = ((await $.store.get('projectColors')) ?? {}) as Record<string, string>
   const saved = all[dir.toLowerCase()]
   const color = saved !== undefined && PROJECT_COLORS.some(c => c.key === saved) ? saved : pickColor(Object.values(all))
   if (color !== saved) await $.store.set('projectColors', { ...all, [dir.toLowerCase()]: color })
-  const project: ToolkitProject = { name: projectName(dir), dir, color }
+  const project: ToolkitProject = { name: projectName(dir), dir, color, isOutside }
   await update($, projectA, () => project)
 }
 
@@ -2223,8 +2225,8 @@ export const register: Register = (on, options) => {
       ...(fiveHourLimit === undefined ? [] : [limitWidth('5h', fiveHourLimit)]),
       ...(weekLimit === undefined ? [] : [limitWidth('Week', weekLimit)]),
     ]
-    // In a project folder, the project's name, bold and in its color, takes the place of "Session"; the line's figures
-    // move right to make room.
+    // Once the folder check has run, the project's name, bold and in its color, takes the place of "Session"; the
+    // line's figures move right to make room.
     const sessionLabel = project != null && projectColor ? Math.max(STRIP_LABEL, project.name.length + 4) : STRIP_LABEL
     const stripRows =
       packRows([sessionWidth, contextWidth], 3, e.props.bodyColumns - sessionLabel - modelWidth - 3) +

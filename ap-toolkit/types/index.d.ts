@@ -138,8 +138,9 @@ export type ToolkitDone = {
 export type ToolkitHelperMode = 'lowest' | 'fast' | 'same'
 
 // The project this session is in: its folder's name, the folder, and its color's key. Colors are kept in $.store as
-// `projectColors`, keyed by the folder in lowercase.
-export type ToolkitProject = { name: string; dir: string; color: string }
+// `projectColors`, keyed by the folder in lowercase. Outside a project folder, it's the folder Claude Code started in,
+// and `isOutside` is true.
+export type ToolkitProject = { name: string; dir: string; color: string; isOutside?: boolean }
 
 // One helper agent in the work view: its task and model, what it's doing now, its new tokens (in and out, without
 // cache re-reads), and their cost estimated from model prices. `parentId` names the helper that started it; absent
