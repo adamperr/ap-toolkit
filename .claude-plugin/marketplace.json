@@ -1,6 +1,7 @@
 {
   "name": "ap-toolkit",
   "owner": { "name": "Adam Perreault" },
+  "description": "AP Toolkit, a Claude Code mod for Windows.",
   "plugins": [
     {
       "name": "ap-toolkit",
