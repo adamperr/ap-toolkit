@@ -1,0 +1,11 @@
+{
+  "name": "ap-toolkit",
+  "owner": { "name": "Adam Perreault" },
+  "plugins": [
+    {
+      "name": "ap-toolkit",
+      "source": "./ap-toolkit",
+      "description": "A usage strip above the prompt, a live view of Claude's steps, model and effort controls, Clean View, Today's report, project colors, and \"Needs you\" alerts."
+    }
+  ]
+}

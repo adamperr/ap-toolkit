@@ -1,0 +1,21 @@
+{
+  "name": "ap-toolkit",
+  "version": "0.1.35",
+  "description": "A clickable panel above the prompt: model, effort, helpers, Clean View, launch buttons, and Help, plus a status row and Today's report.",
+  "author": { "name": "Adam Perreault" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "hourlyRate": {
+      "type": "number",
+      "title": "Hourly rate for Today's report",
+      "description": "What an hour of Claude's work is worth, in US dollars.",
+      "default": 120
+    },
+    "needsYouAlerts": {
+      "type": "boolean",
+      "title": "\"Needs you\" alerts",
+      "description": "A Windows notification when Claude asks something or finishes a request of 2 minutes or more.",
+      "default": true
+    }
+  }
+}
