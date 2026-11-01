@@ -49,12 +49,14 @@ export type ToolkitCostSeen = { usd: number; since: number }
 // backfilled. Tokens in are new ones; `tokensCached` is what Claude re-read from cache. Tokens and cost include
 // helper agents (backfilled from version 4 on). `ms` leaves out the time Claude waited on the person's answers, kept
 // in `waitMs`. A backfilled day's cost is estimated from tokens and model prices when `isCostEstimated`; days
-// backfilled before version 3 have no cost.
+// backfilled before version 3 have no cost. Each type of work keeps its share of the cost once `hasTypeCost`; a
+// record kept before that is split once, by the session files' estimate or, where they don't cover it, by time
+// (`isTypeCostByTime`).
 export type ReportDay = {
   sessions: string[]
   requests: number
   ms: number
-  types: Record<string, { requests: number; ms: number }>
+  types: Record<string, { requests: number; ms: number; costUsd?: number }>
   tokensIn: number
   tokensCached: number
   tokensOut: number
@@ -64,6 +66,8 @@ export type ReportDay = {
   waitMs?: number
   isBackfilled?: boolean
   isCostEstimated?: boolean
+  hasTypeCost?: boolean
+  isTypeCostByTime?: boolean
 }
 
 export type ReportTab = 'today' | 'week' | 'month' | 'year' | 'all'
@@ -93,14 +97,21 @@ export type ToolkitUsage = {
 // The wrap-up nudge on show: which limit is near, and how full it is.
 export type ToolkitNudge = { reason: 'context' | 'fiveHour'; percent: number }
 
-// What the report pane draws: one period's totals, worked out when the tab is picked.
+// What the report pane draws: one period's totals, worked out when the tab is picked. `allCostUsd` is every day's
+// cost, from `firstDay` on; `months` is the period's cost per month, on the Year and All time tabs; `byTimeUsd` is how
+// much of the period's cost was split by type of work by time.
 export type ToolkitReport = {
   tab: ReportTab
   title: string
   sessions: number
   requests: number
   ms: number
-  types: { key: string; label: string; requests: number; ms: number }[]
+  types: { key: string; label: string; requests: number; ms: number; costUsd: number }[]
+  allCostUsd: number
+  allHasCost: boolean
+  firstDay: string | null
+  months: { key: string; costUsd: number }[]
+  byTimeUsd: number
   tokensIn: number
   tokensCached: number
   tokensOut: number

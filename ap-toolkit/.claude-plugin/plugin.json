@@ -1,6 +1,6 @@
 {
   "name": "ap-toolkit",
-  "version": "0.1.38",
+  "version": "0.1.42",
   "description": "A clickable panel above the prompt: model, effort, helpers, Clean View, launch buttons, and Help, plus a status row and Today's report.",
   "author": { "name": "Adam Perreault" },
   "types": "./types/index.d.ts",

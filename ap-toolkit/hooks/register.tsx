@@ -68,8 +68,12 @@ const CLEAR_ARM_MS = 5_000
 const REPORT_PANE = 'report'
 // What an hour of Claude's work is worth in Today's report, unless the person set their own rate.
 const DEFAULT_RATE = 120
-// Raised when the backfill counts differently, so it runs once more and redoes its past-day records.
+// Raised when the backfill counts differently, so it runs once more and redoes its past-day records. Leave it be
+// unless the session files still cover every past day: Claude Code deletes them after a while, so a rerun loses the
+// days they no longer cover.
 const BACKFILL_VERSION = 4
+// A tab skips splitting past costs by type while another tab started doing it this recently.
+const SPLIT_WAIT_MS = 15 * 60_000
 // Tools that wait on the person's answer; that wait is left out of Claude's work time.
 const WAITING_TOOLS = ['AskUserQuestion', 'ExitPlanMode']
 // API prices in $ per million tokens (claude-api skill, cached 2026-10-06): input, output, 5-minute cache writes,
@@ -139,14 +143,15 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **Motion** | While Claude works, a new or changed part lights up briefly, numbers count up, bars fill smoothly, and ◆ beats. |
 | **Model** | Switches Claude's model. A pick made while Claude works applies when it finishes. |
 | **Effort** | How hard Claude thinks. Grayed out on models that don't use it. |
-| **Color** | This project's color, marked ✓, on its name in the strip and on tabs **New tab** opens. Each project gets one on its own, the one fewest projects have; press a swatch to change it. Other tabs open in this project change when they restart. Outside a project folder, it's the color of the folder Claude Code started in. |
+| **Color** | This project's color, marked ✓, on its name in the strip, on tabs **New tab** opens, and on its entry in Windows Terminal's menu. Each project gets one of 12 on its own, the one fewest projects have; press a swatch to change it. Other tabs open in this project change when they restart. Outside a project folder, it's the color of the folder Claude Code started in. |
+| **Terminal's menu** | Each project folder the toolkit has seen has an entry in the **∨** menu next to Windows Terminal's **+**. It opens a tab in that folder, in the project's color, with Claude running. A new project or color shows after Terminal restarts. To remove the entries, delete the **AP Toolkit** folder in \`%LOCALAPPDATA%\\Microsoft\\Windows Terminal\\Fragments\`. |
 | **Helper agents** | Which model helper agents run on. Each press of its pill moves to the next: **Lowest that fits** lets Claude pick per task, **Fast & Cheap** uses Haiku, and **Same as me** uses Claude's own model. |
 | **Clean View** | Hides tool output (reads, edits, and commands), so Claude's words stand out. Questions and plans for your OK stay. The work view above the strip shows either way. |
 | **On / Off pills** | Press the pill at the right of a setting to switch it. The dot beside the setting turns green while it's on. |
 | **Start session** | Asks Claude to read the project map and tell you where things stand. |
 | **New tab** | Opens a Windows Terminal tab in this folder, in the project's color, and starts a fresh Claude session there, with an empty box. Tabs you open yourself stay plain. |
 | **Open project folder** | Opens this session's folder in File Explorer. |
-| **Today's report** | Claude's time, type of work, and usage by day, week, month, year, or all time. Also \`/report\`. A request that changed files counts as Building. Time Claude waits on your answers isn't counted as work. Work from before the toolkit started counting comes from past session files; its cost is estimated from tokens and model prices. Tokens and cost include helper agents. The estimate check line compares that estimate with Claude Code's own cost for past sessions. |
+| **Today's report** | Claude's time, type of work, and usage by day, week, month, year, or all time. Also \`/report\`. A request that changed files counts as Building. Time Claude waits on your answers isn't counted as work. Work from before the toolkit started counting comes from past session files; its cost is estimated from tokens and model prices. Tokens and cost include helper agents. **API cost** is what the period's work would cost at API prices, which your plan doesn't bill, then the total since the toolkit's first day; each type of work shows its share, and the Year and All time tabs list each month with a running total. The estimate check line compares that estimate with Claude Code's own cost for past sessions. |
 | **Clear** | Starts a fresh conversation in this tab, with the same folder and model. Press it twice: the first press asks **Sure?** |
 | **Compact** | Claude summarizes the conversation so far and carries on from the summary, which frees up context. It reads the whole conversation once. A toast says when it's done. |
 | **▴ ▾** | **▴** at the right of the strip opens the controls box (model, effort, settings, and Launch), and **▾** closes it. It remembers which. |
@@ -225,16 +230,29 @@ export const EFFORTS = [
   { key: 'max', label: 'Max', short: 'Max' },
 ]
 
-// A project's color, on its name in the strip and on tabs New tab opens. They skip green, amber, and red, which say
-// how full a bar is, and orange, which is Claude's.
+// A project's color, on its name in the strip, on tabs New tab opens, and on its entry in Windows Terminal's menu.
+// They skip green, amber, and red, which say how full a bar is; orange, which is Claude's; violet, which is Claude
+// Code's "accept edits" and the Effort chip's; and hot pink, which is shell mode's.
 export const PROJECT_COLORS = [
   { key: 'teal', label: 'Teal', hex: '#2EC4B6' },
   { key: 'sky', label: 'Sky', hex: '#4CB4F0' },
+  { key: 'ice', label: 'Ice', hex: '#A8EEF5' },
   { key: 'blue', label: 'Blue', hex: '#7B93FF' },
-  { key: 'violet', label: 'Violet', hex: '#B18CFF' },
+  { key: 'navy', label: 'Navy', hex: '#4A6FE3' },
+  { key: 'lavender', label: 'Lavender', hex: '#D6C8FF' },
   { key: 'magenta', label: 'Magenta', hex: '#E07BE0' },
+  { key: 'plum', label: 'Plum', hex: '#B5609A' },
+  { key: 'rose', label: 'Rose', hex: '#F5A3BF' },
+  { key: 'sand', label: 'Sand', hex: '#D9C79C' },
   { key: 'silver', label: 'Silver', hex: '#C9CED6' },
+  { key: 'slate', label: 'Slate', hex: '#8A99B0' },
 ]
+// A color that left the list, and the one its projects move to.
+const RETIRED_COLORS: Record<string, string> = { violet: 'lavender' }
+// Windows Terminal reads every JSON file in this folder under %LOCALAPPDATA% as a "fragment" that adds profiles to its
+// ∨ menu. Deleting the folder removes them.
+const FRAGMENT_DIR = 'Microsoft\\Windows Terminal\\Fragments\\AP Toolkit'
+const FRAGMENT_FILE = 'projects.json'
 // The longest project name the strip shows whole; a longer one is cut with "…".
 const NAME_MAX = 20
 
@@ -861,7 +879,10 @@ export function short(n: number): string {
 }
 
 const money = (usd: number) => `$${Math.max(0, usd).toFixed(2)}`
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+// A report's dollars: cents under $100, else whole dollars with commas, such as $4,965.
+export const dollars = (usd: number) =>
+  usd < 99.995 ? money(usd) : `$${String(Math.round(usd)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`
+const plural =(n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 // Eastern Time is UTC−4 from the second Sunday of March at 2:00 to the first Sunday of November at 2:00, else UTC−5.
 function easternOffsetMs(ms: number): number {
@@ -896,6 +917,18 @@ export function periodStart(tab: ReportTab, today: string): string {
   if (tab === 'year') return `${today.slice(0, 5)}01-01`
   return '0000-01-01'
 }
+
+// How the report's cost line names each tab's period.
+const PERIOD_WORDS: Record<ReportTab, string> = {
+  today: 'today',
+  week: 'this week',
+  month: 'this month',
+  year: 'this year',
+  all: 'all time',
+}
+
+// A day as "Sep 13".
+export const shortDay = (day: string) => `${MONTHS[noonOf(day).getUTCMonth()]?.slice(0, 3)} ${noonOf(day).getUTCDate()}`
 
 function periodTitle(tab: ReportTab, today: string, from: string): string {
   const d = noonOf(today)
@@ -951,7 +984,7 @@ const emptyDay = (): ReportDay => ({
 })
 
 // Each session keeps its own record per day (`day:YYYY-MM-DD:<session>`), so two tabs finishing at once can't
-// overwrite each other's counts.
+// overwrite each other's counts. A new record splits its cost by type of work from the start.
 async function updateDay($: EngineInterface, now: number, change: (d: ReportDay, session: string) => ReportDay) {
   try {
     let session = 'unknown'
@@ -960,9 +993,18 @@ async function updateDay($: EngineInterface, now: number, change: (d: ReportDay,
     } catch {}
     const key = `day:${easternDay(now)}:${session}`
     const old = (await $.store.get(key)) as Partial<ReportDay> | undefined
-    await $.store.set(key, change({ ...emptyDay(), ...(old ?? {}) }, session))
+    await $.store.set(key, change(old === undefined ? { ...emptyDay(), hasTypeCost: true } : { ...emptyDay(), ...old }, session))
   } catch {}
 }
+
+// Adds cost to one type of work, which may have no request of its own that day (a helper that ends after midnight).
+const withTypeCost = (types: ReportDay['types'], type: string, usd: number): ReportDay['types'] =>
+  usd > 0
+    ? { ...types, [type]: { requests: 0, ms: 0, ...types[type], costUsd: (types[type]?.costUsd ?? 0) + usd } }
+    : types
+
+// The type of work the last finished request was, for a helper that ends after it.
+let lastType = 'helpers'
 
 // What the session has spent since it was last counted into the report: Claude's requests, helper agents (also those
 // that finish after Claude's reply), and anything in between. /clear starts the session's cost over.
@@ -993,14 +1035,18 @@ async function noteSessionCost($: EngineInterface) {
   } catch {}
 }
 
-// Counts a finished helper agent's tokens into today's report. Its time falls inside the request that started it.
+// Counts a finished helper agent's tokens into today's report. Its time falls inside the request that started it,
+// and its cost goes to that request's type of work: the one judged so far, or the last one if it has finished.
 async function recordHelper($: EngineInterface, usage: TurnTokens | undefined) {
   try {
     const now = await $.clock.now()
+    const run = await read($, runA)
+    const type = run == null ? lastType : workType(run.tools)
     const spent = await spentSinceCounted($)
     await noteSessionCost($)
     await updateDay($, now, d => ({
       ...d,
+      types: withTypeCost(d.types, type, spent),
       tokensIn: d.tokensIn + (usage ? usage.input_tokens + usage.cache_creation_input_tokens : 0),
       tokensCached: d.tokensCached + (usage?.cache_read_input_tokens ?? 0),
       tokensOut: d.tokensOut + (usage?.output_tokens ?? 0),
@@ -1015,6 +1061,7 @@ async function recordTurn($: EngineInterface, durationMs: number, usage: TurnTok
   try {
     const now = await $.clock.now()
     const type = workType(run?.tools ?? [])
+    lastType = type
     const spent = await spentSinceCounted($)
     await noteSessionCost($)
     const waited = Math.min(durationMs, run?.waitMs ?? 0)
@@ -1024,10 +1071,14 @@ async function recordTurn($: EngineInterface, durationMs: number, usage: TurnTok
       sessions: d.sessions.includes(session) ? d.sessions : [...d.sessions, session],
       requests: d.requests + 1,
       ms: d.ms + ms,
-      types: {
-        ...d.types,
-        [type]: { requests: (d.types[type]?.requests ?? 0) + 1, ms: (d.types[type]?.ms ?? 0) + ms },
-      },
+      types: withTypeCost(
+        {
+          ...d.types,
+          [type]: { ...d.types[type], requests: (d.types[type]?.requests ?? 0) + 1, ms: (d.types[type]?.ms ?? 0) + ms },
+        },
+        type,
+        spent,
+      ),
       tokensIn: d.tokensIn + (usage ? usage.input_tokens + usage.cache_creation_input_tokens : 0),
       tokensCached: d.tokensCached + (usage?.cache_read_input_tokens ?? 0),
       tokensOut: d.tokensOut + (usage?.output_tokens ?? 0),
@@ -1104,25 +1155,45 @@ function pastLine(line: string): PastLine | null {
   }
 }
 
+// The backfill script's lines, each with its type of work. A helper takes the type of the request in its session that
+// started last before it, or Working with helpers when none did.
+export function typedLines(text: string): (PastLine & { type: string })[] {
+  const lines = text
+    .split('\n')
+    .map(pastLine)
+    .filter((p): p is PastLine => p !== null)
+  const starts = new Map<string, { at: number; type: string }[]>()
+  for (const p of lines) {
+    if (!p.isHelper) starts.set(p.session, [...(starts.get(p.session) ?? []), { at: p.at, type: workType(p.tools) }])
+  }
+  for (const s of starts.values()) s.sort((a, b) => a.at - b.at)
+  return lines.map(p => ({
+    ...p,
+    type: p.isHelper
+      ? ([...(starts.get(p.session) ?? [])].reverse().find(s => s.at <= p.at)?.type ?? 'helpers')
+      : workType(p.tools),
+  }))
+}
+
 // Turns the backfill script's lines into totals per Eastern day, for the requests made before live counting began.
 // Lines from version 3 on add the model, the token split that prices them, and the time spent waiting on answers.
-// Version 4 adds helper agents' tokens and cost.
+// Version 4 adds helper agents' tokens and cost. Each type of work keeps its share of the cost.
 export function backfillDays(text: string, beforeMs: number): Record<string, ReportDay> {
   const days: Record<string, ReportDay> = {}
-  for (const line of text.split('\n')) {
-    const p = pastLine(line)
-    if (p === null || p.at >= beforeMs) continue
+  for (const p of typedLines(text)) {
+    if (p.at >= beforeMs) continue
     const d = (days[easternDay(p.at)] ??= { ...emptyDay(), isBackfilled: true })
     if (!p.isHelper) {
-      const type = workType(p.tools)
+      const type = p.type
       const wait = Math.min(p.took, p.waited)
       const ms = p.took - wait
       if (!d.sessions.includes(p.session)) d.sessions.push(p.session)
       d.requests += 1
       d.ms += ms
-      d.types[type] = { requests: (d.types[type]?.requests ?? 0) + 1, ms: (d.types[type]?.ms ?? 0) + ms }
+      d.types[type] = { ...d.types[type], requests: (d.types[type]?.requests ?? 0) + 1, ms: (d.types[type]?.ms ?? 0) + ms }
       if (wait > 0) d.waitMs = (d.waitMs ?? 0) + wait
     }
+    if (p.cost) d.types = withTypeCost(d.types, p.type, p.cost)
     d.tokensIn += p.tokensIn
     d.tokensCached += p.tokensCached
     d.tokensOut += p.tokensOut
@@ -1175,9 +1246,74 @@ async function backfill($: EngineInterface) {
     for (const k of await $.store.keys()) {
       if (/^day:\d{4}-\d{2}-\d{2}(:past)?$/.test(k)) await $.store.delete(k)
     }
-    for (const [day, d] of Object.entries(days)) await $.store.set(`day:${day}:past`, d)
+    for (const [day, d] of Object.entries(days)) await $.store.set(`day:${day}:past`, { ...d, hasTypeCost: true })
     await $.store.set('backfilledAt', now)
     await $.store.set('backfillVersion', BACKFILL_VERSION)
+    await splitPastCosts($, r.stdout)
+  } catch {}
+}
+
+// A record's cost split by type of work: by each type's share of the cost estimated from the session files, or by
+// each type's share of the time (or requests) where the files don't cover it. Cost with no type to go to goes to
+// Working with helpers, so the types always add up to the record's cost.
+export function splitCost(d: ReportDay, estimate: Record<string, number> | undefined): ReportDay {
+  const isByTime = Object.values(estimate ?? {}).reduce((n, x) => n + x, 0) <= 0
+  const weights: Record<string, number> = isByTime
+    ? Object.fromEntries(Object.entries(d.types).map(([t, v]) => [t, d.ms > 0 ? v.ms : v.requests]))
+    : (estimate ?? {})
+  const total = Object.values(weights).reduce((n, x) => n + x, 0)
+  let types: ReportDay['types'] = Object.fromEntries(Object.entries(d.types).map(([t, v]) => [t, { requests: v.requests, ms: v.ms }]))
+  if (total > 0) for (const [t, w] of Object.entries(weights)) types = withTypeCost(types, t, (d.costUsd * w) / total)
+  else types = withTypeCost(types, 'helpers', d.costUsd)
+  return { ...d, types, hasTypeCost: true, ...(isByTime && d.costUsd > 0 ? { isTypeCostByTime: true } : {}) }
+}
+
+// Once, for records kept before cost was split by type of work: each gets its split from the session files. The
+// script's lines come from the backfill when it just ran.
+async function splitPastCosts($: EngineInterface, text?: string) {
+  try {
+    const isDue = async (k: string) => {
+      const d = (await $.store.get(k)) as Partial<ReportDay> | undefined
+      return d !== undefined && d.hasTypeCost !== true ? { ...emptyDay(), ...d } : null
+    }
+    const due: string[] = []
+    for (const k of await $.store.keys()) {
+      if (/^day:\d{4}-\d{2}-\d{2}:/.test(k) && (await isDue(k)) !== null) due.push(k)
+    }
+    const now = await $.clock.now()
+    if (due.length === 0) return void (await $.store.set('typeCostSplit', now))
+    let lines = text
+    if (lines === undefined) {
+      // Another tab that started at the same time may be splitting already.
+      if (now - (Number(await $.store.get('typeCostSplitStarted')) || 0) < SPLIT_WAIT_MS) return
+      await $.store.set('typeCostSplitStarted', now)
+      const home = await $.env.get('USERPROFILE')
+      if (!home) return
+      const since = new Date(now - 366 * 86_400_000).toISOString()
+      const script = `${$.plugin.root}/scripts/backfill.ps1`
+      const r = await $.process.run([...POWERSHELL, script, '-Projects', `${home}\\.claude\\projects`, '-Since', since], {
+        timeoutMs: 600_000,
+      })
+      if (r.exitCode !== 0) return
+      lines = r.stdout
+    }
+    // The estimate per record, as the records are kept: before live counting began, one per day; after, one per
+    // session per day.
+    const liveSince = Number(await $.store.get('liveSince')) || Infinity
+    const estimates = new Map<string, Record<string, number>>()
+    for (const p of typedLines(lines)) {
+      if (!p.cost) continue
+      const key = `day:${easternDay(p.at)}:${p.at < liveSince ? 'past' : p.session}`
+      const e = estimates.get(key) ?? {}
+      e[p.type] = (e[p.type] ?? 0) + p.cost
+      estimates.set(key, e)
+    }
+    // Read again, since the script takes a while and this session may have counted more in the meantime.
+    for (const k of due) {
+      const d = await isDue(k)
+      if (d !== null) await $.store.set(k, splitCost(d, estimates.get(k)))
+    }
+    await $.store.set('typeCostSplit', now)
   } catch {}
 }
 
@@ -1219,20 +1355,27 @@ async function showReport($: EngineInterface, tab: ReportTab) {
     const now = await $.clock.now()
     const today = easternDay(now)
     const from = periodStart(tab, today)
-    const keys = (await $.store.keys()).filter(
-      k => k.startsWith('day:') && k.slice(4, 14) >= from && k.slice(4, 14) <= today,
-    )
-    const days: ReportDay[] = []
-    for (const k of keys) {
+    // Every day is read, for the all-time cost; the period's days are those from its first day through today.
+    const dated: { day: string; d: ReportDay }[] = []
+    for (const k of (await $.store.keys()).filter(k => k.startsWith('day:'))) {
       const d = (await $.store.get(k)) as Partial<ReportDay> | undefined
-      if (d) days.push({ ...emptyDay(), ...d })
+      if (d) dated.push({ day: k.slice(4, 14), d: { ...emptyDay(), ...d } })
     }
+    const inPeriod = dated.filter(x => x.day >= from && x.day <= today)
+    const days = inPeriod.map(x => x.d)
     const sum = (f: (d: ReportDay) => number) => days.reduce((n, d) => n + f(d), 0)
     const types = WORK_TYPES.map(w => ({
       ...w,
       requests: sum(d => d.types[w.key]?.requests ?? 0),
       ms: sum(d => d.types[w.key]?.ms ?? 0),
-    })).filter(t => t.requests > 0)
+      costUsd: sum(d => d.types[w.key]?.costUsd ?? 0),
+    })).filter(t => t.requests > 0 || t.costUsd > 0)
+    const isUncosted = (d: ReportDay) => d.isBackfilled === true && d.isCostEstimated !== true
+    const counted = dated.filter(x => x.d.requests > 0 || x.d.costUsd > 0).map(x => x.day)
+    const months = new Map<string, number>()
+    if (tab === 'year' || tab === 'all') {
+      for (const x of inPeriod) months.set(x.day.slice(0, 7), (months.get(x.day.slice(0, 7)) ?? 0) + x.d.costUsd)
+    }
     const ms = sum(d => d.ms)
     types.sort((a, b) => (ms > 0 ? b.ms - a.ms : b.requests - a.requests))
     let fiveHour: number | null = null
@@ -1273,8 +1416,13 @@ async function showReport($: EngineInterface, tab: ReportTab) {
       fiveHour,
       week,
       waitMs: sum(d => d.waitMs ?? 0),
+      allCostUsd: dated.reduce((n, x) => n + x.d.costUsd, 0),
+      allHasCost: !dated.some(x => isUncosted(x.d)),
+      firstDay: counted.length === 0 ? null : counted.reduce((a, b) => (b < a ? b : a)),
+      months: [...months.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, costUsd]) => ({ key, costUsd })),
+      byTimeUsd: sum(d => (d.isTypeCostByTime === true ? d.costUsd : 0)),
       hasBackfill: days.some(d => d.isBackfilled === true),
-      hasCost: !days.some(d => d.isBackfilled === true && d.isCostEstimated !== true),
+      hasCost: !days.some(isUncosted),
       liveSince: Number(await $.store.get('liveSince')) || null,
       check,
     }
@@ -1429,17 +1577,26 @@ async function checkFolder($: EngineInterface) {
   } catch {}
 }
 
-// Gives the strip and New tab the project's color, picking one the first time the toolkit sees the project.
+// A saved color, moved on from one that left the list.
+const currentColor = (key: string | undefined) => (key === undefined ? undefined : (RETIRED_COLORS[key] ?? key))
+
+// Gives the strip and New tab the project's color, picking one the first time the toolkit sees the project. A project
+// folder also joins Windows Terminal's menu.
 async function noteProject($: EngineInterface, dir: string, isOutside = false) {
   const all = ((await $.store.get('projectColors')) ?? {}) as Record<string, string>
-  const saved = all[dir.toLowerCase()]
-  const color = saved !== undefined && PROJECT_COLORS.some(c => c.key === saved) ? saved : pickColor(Object.values(all))
-  if (color !== saved) await $.store.set('projectColors', { ...all, [dir.toLowerCase()]: color })
+  const was = all[dir.toLowerCase()]
+  const saved = currentColor(was)
+  const color =
+    saved !== undefined && PROJECT_COLORS.some(c => c.key === saved) ? saved : pickColor(Object.values(all).map(c => RETIRED_COLORS[c] ?? c))
+  if (color !== was) await $.store.set('projectColors', { ...all, [dir.toLowerCase()]: color })
   const project: ToolkitProject = { name: projectName(dir), dir, color, isOutside }
   await update($, projectA, () => project)
+  if (!isOutside) await noteProjectDir($, dir)
+  await writeMenu($)
 }
 
-// A press in the Color row gives the project that color, here and on tabs New tab opens from now on.
+// A press in the Color row gives the project that color, here, on tabs New tab opens from now on, and on its entry in
+// Windows Terminal's menu.
 async function setProjectColor($: EngineInterface, color: string) {
   const project = await read($, projectA)
   if (project == null) return
@@ -1447,6 +1604,92 @@ async function setProjectColor($: EngineInterface, color: string) {
   try {
     const all = ((await $.store.get('projectColors')) ?? {}) as Record<string, string>
     await $.store.set('projectColors', { ...all, [project.dir.toLowerCase()]: color })
+  } catch {}
+  await writeMenu($)
+}
+
+// The project folders the toolkit has seen, by lowercased path: each one's path as written on disk, or null for a
+// folder that isn't a project's (one the toolkit only colored because Claude Code started there).
+type ProjectDirs = Record<string, string | null>
+
+async function noteProjectDir($: EngineInterface, dir: string) {
+  try {
+    const dirs = ((await $.store.get('projectDirs')) ?? {}) as ProjectDirs
+    if (dirs[dir.toLowerCase()] !== dir) await $.store.set('projectDirs', { ...dirs, [dir.toLowerCase()]: dir })
+  } catch {}
+}
+
+// A folder's path as written on disk, from a lowercased one, such as E:\ClaudeMods from e:\claudemods; null when it
+// isn't there.
+async function pathOnDisk($: EngineInterface, lower: string): Promise<string | null> {
+  const [drive, ...parts] = lower.split(/[\\/]+/).filter(Boolean)
+  if (drive === undefined || !/^[a-z]:$/i.test(drive)) return null
+  let path = drive.toUpperCase()
+  for (const part of parts) {
+    const hit = (await $.fs.list(`${path}\\`)).find(x => x.kind === 'dir' && x.name.toLowerCase() === part.toLowerCase())
+    if (hit === undefined) return null
+    path = `${path}\\${hit.name}`
+  }
+  return path
+}
+
+// A stable profile id from a project's folder, so Windows Terminal keeps one entry per project across rewrites.
+export function profileGuid(dir: string): string {
+  const key = dir.toLowerCase()
+  let hex = ''
+  for (const seed of [0x811c9dc5, 0x2c1b3c6d, 0x297a2d39, 0x6c8e9cf5]) {
+    let h = seed
+    for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193) >>> 0
+    hex += h.toString(16).padStart(8, '0')
+  }
+  return `{${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}}`
+}
+
+// The fragment file Windows Terminal reads: one profile per project, named for its folder, that opens a tab there in
+// the project's color and starts Claude with New tab's script. Sorted by name, as the menu lists them.
+export function menuText(projects: readonly { dir: string; color: string }[], script: string): string {
+  const profiles = projects
+    .map(p => ({
+      guid: profileGuid(p.dir),
+      name: p.dir.split(/[\\/]/).pop() || p.dir,
+      commandline: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${script}"`,
+      startingDirectory: p.dir,
+      tabColor: PROJECT_COLORS.find(c => c.key === currentColor(p.color))?.hex,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  return `${JSON.stringify({ profiles }, null, 2)}\n`
+}
+
+// Keeps Windows Terminal's menu in step with the project folders the toolkit has seen and their colors. Folders seen
+// before the menu existed are checked once: those with their own CLAUDE.md join. Written only when it changes.
+async function writeMenu($: EngineInterface) {
+  try {
+    const appData = await $.env.get('LOCALAPPDATA')
+    if (!appData) return
+    const colors = ((await $.store.get('projectColors')) ?? {}) as Record<string, string>
+    const dirs = ((await $.store.get('projectDirs')) ?? {}) as ProjectDirs
+    const home = ((await $.env.get('USERPROFILE')) ?? '').toLowerCase().replace(/[\\/]+$/, '')
+    // A network location, which the engine won't check, counts as not there.
+    const isThere = (path: string) => $.fs.exists(path).catch(() => false)
+    let isNew = false
+    for (const lower of Object.keys(colors)) {
+      if (lower in dirs) continue
+      const dir = lower === home ? null : await pathOnDisk($, lower).catch(() => null)
+      const isProject = dir !== null && ((await isThere(`${dir}\\CLAUDE.md`)) || (await isThere(`${dir}\\.claude\\CLAUDE.md`)))
+      dirs[lower] = isProject ? dir : null
+      isNew = true
+    }
+    if (isNew) await $.store.set('projectDirs', dirs)
+    const projects: { dir: string; color: string }[] = []
+    for (const [lower, dir] of Object.entries(dirs)) {
+      const color = colors[lower]
+      if (dir !== null && color !== undefined && (await isThere(dir))) projects.push({ dir, color })
+    }
+    const script = `${$.plugin.root}/scripts/new-tab.ps1`.replace(/\//g, '\\')
+    const text = menuText(projects, script)
+    const path = `${appData}\\${FRAGMENT_DIR}\\${FRAGMENT_FILE}`
+    const old = await $.fs.read(path).catch(() => null)
+    if (old !== text && (old !== null || projects.length > 0)) await $.fs.write(path, text)
   } catch {}
 }
 
@@ -1600,6 +1843,7 @@ export const register: Register = (on, options) => {
       await $.command.register({ name: 'report', description: "Open Today's report: time, type of work, and usage" })
       if ((await $.store.get('liveSince')) === undefined) await $.store.set('liveSince', await $.clock.now())
       if ((await $.store.get('backfillVersion')) !== BACKFILL_VERSION) $.clock.after(10_000, () => void backfill($))
+      else if ((await $.store.get('typeCostSplit')) === undefined) $.clock.after(30_000, () => void splitPastCosts($))
       $.clock.after(20_000, () => void checkEstimates($))
     } catch {}
     return next(e)
@@ -1928,7 +2172,13 @@ export const register: Register = (on, options) => {
         {text ? <Text dimColor>{`  ${text}`}</Text> : null}
       </Box>
     )
-    const grayRow = () => <Text color="subtle">{'─'.repeat(Math.max(0, e.props.bodyColumns))}</Text>
+    // A gray row is clipped to one row, so it stops at the band's edge where the band is narrower than bodyColumns
+    // says (the Claude app): it can't spill onto a second row and push the band past its rows.
+    const grayRow = () => (
+      <Box height={1} overflow="hidden" flexShrink={0}>
+        <Text color="subtle">{'─'.repeat(Math.max(0, e.props.bodyColumns))}</Text>
+      </Box>
+    )
     // This turn's tokens read new ("in") and written ("out"), as Claude Code counts them, then its cost.
     const turnPart = (tokens: number, out: number, usd: number | null) => (
       <Text>
@@ -2477,6 +2727,11 @@ export const register: Register = (on, options) => {
     const width = Math.min(PANEL_WIDTH, e.props.bodyColumns)
     const inner = Math.max(0, width - PANEL_FRAME)
     const half = Math.floor(inner / 2)
+    // The Color row's width with swatches this many cells wide: the label, the swatches with a cell between, and the
+    // longest color name. Swatches slim to two cells where three don't fit, and the name goes where that still doesn't.
+    const colorRow = (cells: number) =>
+      LABEL_WIDTH + PROJECT_COLORS.length * (cells + 1) + Math.max(...PROJECT_COLORS.map(c => c.label.length))
+    const isSlim = inner < colorRow(3)
     const nextHelper =
       HELPER_MODES[(HELPER_MODES.findIndex(m => m.key === helperMode) + 1) % HELPER_MODES.length]?.key ?? 'lowest'
     const helperLabel = HELPER_MODES.find(m => m.key === helperMode)?.[isNarrow ? 'short' : 'label'] ?? ''
@@ -2567,15 +2822,15 @@ export const register: Register = (on, options) => {
               <Box width={LABEL_WIDTH} flexShrink={0}>
                 <Text dimColor>COLOR</Text>
               </Box>
-              <Box gap={1}>
+              <Box gap={1} flexWrap="wrap">
                 {PROJECT_COLORS.map(c => (
                   <Button key={`color-${c.key}`} plain onPress={() => (c.key === project.color ? undefined : setProjectColor($, c.key))}>
                     <Text backgroundColor={c.hex} color="inverseText">
-                      {c.key === project.color ? ' ✓ ' : '   '}
+                      {c.key === project.color ? (isSlim ? '✓ ' : ' ✓ ') : isSlim ? '  ' : '   '}
                     </Text>
                   </Button>
                 ))}
-                <Text dimColor>{projectColor.label}</Text>
+                {inner >= colorRow(isSlim ? 2 : 3) ? <Text dimColor>{projectColor.label}</Text> : null}
               </Box>
             </Box>
           ) : null}
@@ -2690,12 +2945,34 @@ export const register: Register = (on, options) => {
           ]
             .filter(Boolean)
             .join(' · ')
+    // Cost at API prices shows in one place: this period's, then all time's, on every tab. Days backfilled before cost
+    // estimates have no cost, so a period with one says so rather than undercount it.
+    const sinceText = r.firstDay === null ? '' : ` since ${shortDay(r.firstDay)}`
+    const cost = [
+      r.tab === 'all' ? undefined : r.hasCost ? `${dollars(r.costUsd)} ${PERIOD_WORDS[r.tab]}` : `not known ${PERIOD_WORDS[r.tab]}`,
+      r.allHasCost ? `${dollars(r.allCostUsd)} all time` : r.tab === 'all' ? 'not known all time' : undefined,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    // Each type of work's share of the cost, lined up on the right.
+    const typeCost = r.types.map(t => dollars(t.costUsd))
+    const typeCostWidth = Math.max(0, ...typeCost.map(c => c.length))
+    // The Year and All time tabs: each month's cost, its bar against the dearest month, and the running total.
+    const dearest = Math.max(0, ...r.months.map(m => m.costUsd))
+    let running = 0
+    const months = r.months.map(m => {
+      running += m.costUsd
+      const label = `${MONTHS[Number(m.key.slice(5, 7)) - 1]?.slice(0, 3)} ${m.key.slice(0, 4)}`
+      const from = r.firstDay !== null && r.firstDay.startsWith(m.key) && !r.firstDay.endsWith('-01') ? ` from ${shortDay(r.firstDay)}` : ''
+      return { label: `${label}${from}`, percent: dearest > 0 ? (m.costUsd / dearest) * 100 : 0, cost: dollars(m.costUsd), total: dollars(running) }
+    })
+    const monthWidth = Math.max('month'.length, ...months.map(m => m.cost.length)) + 2
+    const totalWidth = Math.max('running total'.length, ...months.map(m => m.total.length)) + 2
+    const barWidth = isNarrow ? 8 : 16
     const usage = [
       `${short(r.tokensIn)} tokens in`,
       `${short(r.tokensOut)} out`,
       r.tokensCached > 0 ? `${short(r.tokensCached)} re-read from cache` : undefined,
-      // Days backfilled before cost estimates have no cost, so a period with one leaves cost out rather than undercount it.
-      r.hasCost ? `≈ ${money(r.costUsd)}` : undefined,
       r.fiveHour !== null ? `5h ${r.fiveHour}% now` : undefined,
       r.week !== null ? `week ${r.week}%` : undefined,
     ]
@@ -2721,17 +2998,42 @@ export const register: Register = (on, options) => {
           </Box>
         </Box>
         <Text>{headline}</Text>
+        {cost !== '' ? (
+          <Text wrap="truncate-end">
+            <Text dimColor>API cost </Text>
+            {cost}
+            {r.allHasCost ? <Text dimColor>{sinceText}</Text> : null}
+          </Text>
+        ) : null}
+        {r.allHasCost && r.hasCost && months.length > 0 ? (
+          <Box flexDirection="column">
+            <Text dimColor wrap="truncate-end">
+              {'API cost by month'.padEnd(22 + barWidth)}
+              {'month'.padStart(monthWidth)}
+              {'running total'.padStart(totalWidth)}
+            </Text>
+            {months.map(m => (
+              <Text wrap="truncate-end">
+                <Text>{m.label.padEnd(22)}</Text>
+                <Text color="claude">{bar(m.percent, barWidth)}</Text>
+                <Text>{m.cost.padStart(monthWidth)}</Text>
+                <Text>{m.total.padStart(totalWidth)}</Text>
+              </Text>
+            ))}
+          </Box>
+        ) : null}
         {r.types.length > 0 ? (
           <Box flexDirection="column">
-            {r.types.map(t => (
+            {r.types.map((t, i) => (
               <Text wrap="truncate-end">
                 <Text>{t.label.padEnd(22)}</Text>
-                <Text color="claude">{bar(share(t), isNarrow ? 8 : 16)}</Text>
+                <Text color="claude">{bar(share(t), barWidth)}</Text>
                 <Text> {String(share(t)).padStart(3)}%</Text>
                 <Text dimColor>
                   {'  '}
                   {[t.ms > 0 ? duration(t.ms) : undefined, plural(t.requests, 'request')].filter(Boolean).join(' · ')}
                 </Text>
+                {r.hasCost ? <Text> · {(typeCost[i] ?? '').padStart(typeCostWidth)}</Text> : null}
               </Text>
             ))}
           </Box>
@@ -2754,6 +3056,12 @@ export const register: Register = (on, options) => {
           <Text dimColor>
             Work before {easternWhen(r.liveSince)} comes from past session files
             {r.hasCost ? '; its cost is estimated from tokens and model prices.' : ', which carry no cost.'}
+          </Text>
+        ) : null}
+        {r.hasCost && r.byTimeUsd > 0 ? (
+          <Text dimColor>
+            {dollars(r.byTimeUsd)} of the cost by type of work is split by time, since the session files don't cover that
+            work.
           </Text>
         ) : null}
       </Box>
