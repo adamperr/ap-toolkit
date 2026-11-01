@@ -10,6 +10,7 @@ import type {
   ToolkitDone,
   ToolkitHelperMode,
   ToolkitLimit,
+  ToolkitMenuEntry,
   ToolkitNudge,
   ToolkitPending,
   ToolkitProject,
@@ -49,6 +50,7 @@ const agentsA = atom({ plugin: 'ap-toolkit', key: 'agents' } as const, [])
 const shellsA = atom({ plugin: 'ap-toolkit', key: 'shells' } as const, [])
 const stopArmedA = atom({ plugin: 'ap-toolkit', key: 'stopArmed' } as const, null)
 const projectA = atom({ plugin: 'ap-toolkit', key: 'project' } as const, null)
+const menuA = atom({ plugin: 'ap-toolkit', key: 'menu' } as const, null)
 
 // The wrap-up nudge shows once context or the 5-hour limit reaches these, and again after it drops back and returns.
 const NUDGE_CONTEXT = 75
@@ -66,6 +68,7 @@ const POWERSHELL = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass'
 const CLEAR_ARM_MS = 5_000
 
 const REPORT_PANE = 'report'
+const MENU_PANE = 'terminal-menu'
 // What an hour of Claude's work is worth in Today's report, unless the person set their own rate.
 const DEFAULT_RATE = 120
 // Raised when the backfill counts differently, so it runs once more and redoes its past-day records. Leave it be
@@ -113,6 +116,7 @@ export const LAUNCHES = [
   { key: 'tab', label: 'New tab', short: 'New tab', icon: '+', color: 'success' },
   { key: 'report', label: "Today's report", short: 'Report', icon: '▤', color: 'warning' },
   { key: 'folder', label: 'Open project folder', short: 'Folder', icon: '▣', color: 'ide' },
+  { key: 'menu', label: 'Terminal menu', short: 'Menu', icon: '▦', color: 'planMode' },
 ]
 // The slot after the Launch list holds these two side by side, for a long conversation.
 export const FRESH = [
@@ -144,12 +148,13 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **Model** | Switches Claude's model. A pick made while Claude works applies when it finishes. |
 | **Effort** | How hard Claude thinks. Grayed out on models that don't use it. |
 | **Color** | This project's color, marked ✓, on its name in the strip, on tabs **New tab** opens, and on its entry in Windows Terminal's menu. Each project gets one of 12 on its own, the one fewest projects have; press a swatch to change it. Other tabs open in this project change when they restart. Outside a project folder, it's the color of the folder Claude Code started in. |
-| **Terminal's menu** | Each project folder the toolkit has seen has an entry in the **∨** menu next to Windows Terminal's **+**. It opens a tab in that folder, in the project's color, with Claude running. A new project or color shows after Terminal restarts. To remove the entries, delete the **AP Toolkit** folder in \`%LOCALAPPDATA%\\Microsoft\\Windows Terminal\\Fragments\`. |
+| **Terminal's menu** | Each project folder the toolkit has seen has an entry in the **∨** menu next to Windows Terminal's **+**. It opens a tab in that folder, named for the project and in its color, with Claude running. A new project or color shows after Terminal restarts. **Terminal menu** lists them all, to remove one or add it back. |
+| **Terminal menu** | Lists each project in Windows Terminal's **∨** menu, with **Remove** next to it. A removed project stays out of the menu, even when Claude starts there again, until you press **Add back**. Terminal shows a change the next time it starts. A project whose folder is gone leaves the menu by itself. |
 | **Helper agents** | Which model helper agents run on. Each press of its pill moves to the next: **Lowest that fits** lets Claude pick per task, **Fast & Cheap** uses Haiku, and **Same as me** uses Claude's own model. |
 | **Clean View** | Hides tool output (reads, edits, and commands), so Claude's words stand out. Questions and plans for your OK stay. The work view above the strip shows either way. |
 | **On / Off pills** | Press the pill at the right of a setting to switch it. The dot beside the setting turns green while it's on. |
 | **Start session** | Asks Claude to read the project map and tell you where things stand. |
-| **New tab** | Opens a Windows Terminal tab in this folder, in the project's color, and starts a fresh Claude session there, with an empty box. Tabs you open yourself stay plain. |
+| **New tab** | Opens a Windows Terminal tab in this folder, named for the project and in its color, and starts a fresh Claude session there, with an empty box. Claude Code leaves that tab's name alone. Tabs you open yourself stay plain and read **Claude Code**. |
 | **Open project folder** | Opens this session's folder in File Explorer. |
 | **Today's report** | Claude's time, type of work, and usage by day, week, month, year, or all time. Also \`/report\`. A request that changed files counts as Building. Time Claude waits on your answers isn't counted as work. Work from before the toolkit started counting comes from past session files; its cost is estimated from tokens and model prices. Tokens and cost include helper agents. **API cost** is what the period's work would cost at API prices, which your plan doesn't bill, then the total since the toolkit's first day; each type of work shows its share, and the Year and All time tabs list each month with a running total. The estimate check line compares that estimate with Claude Code's own cost for past sessions. |
 | **Clear** | Starts a fresh conversation in this tab, with the same folder and model. Press it twice: the first press asks **Sure?** |
@@ -1469,6 +1474,7 @@ async function launch($: EngineInterface, key: string) {
     if (key === 'tab') await newTab($)
     if (key === 'folder') await $.process.run(['explorer.exe', await $.session.cwd()])
     if (key === 'report') await openReport($)
+    if (key === 'menu') await openMenu($)
     if (key === 'clear') await $.command.run({ command: 'clear' })
     // A compaction a hook skips gets the engine's own line saying why.
     if (key === 'compact' && (await $.session.compact()).skip === undefined) {
@@ -1660,37 +1666,82 @@ export function menuText(projects: readonly { dir: string; color: string }[], sc
   return `${JSON.stringify({ profiles }, null, 2)}\n`
 }
 
-// Keeps Windows Terminal's menu in step with the project folders the toolkit has seen and their colors. Folders seen
-// before the menu existed are checked once: those with their own CLAUDE.md join. Written only when it changes.
+// The project folders the toolkit has seen that are still on disk, with their colors: what Windows Terminal's menu can
+// list. Folders seen before the menu existed are checked once: those with their own CLAUDE.md join.
+async function menuProjects($: EngineInterface): Promise<{ key: string; dir: string; color: string }[]> {
+  const colors = ((await $.store.get('projectColors')) ?? {}) as Record<string, string>
+  const dirs = ((await $.store.get('projectDirs')) ?? {}) as ProjectDirs
+  const home = ((await $.env.get('USERPROFILE')) ?? '').toLowerCase().replace(/[\\/]+$/, '')
+  // A network location, which the engine won't check, counts as not there.
+  const isThere = (path: string) => $.fs.exists(path).catch(() => false)
+  let isNew = false
+  for (const lower of Object.keys(colors)) {
+    if (lower in dirs) continue
+    const dir = lower === home ? null : await pathOnDisk($, lower).catch(() => null)
+    const isProject = dir !== null && ((await isThere(`${dir}\\CLAUDE.md`)) || (await isThere(`${dir}\\.claude\\CLAUDE.md`)))
+    dirs[lower] = isProject ? dir : null
+    isNew = true
+  }
+  if (isNew) await $.store.set('projectDirs', dirs)
+  const projects: { key: string; dir: string; color: string }[] = []
+  for (const [lower, dir] of Object.entries(dirs)) {
+    const color = colors[lower]
+    if (dir !== null && color !== undefined && (await isThere(dir))) projects.push({ key: lower, dir, color })
+  }
+  return projects
+}
+
+// The project folders removed from Windows Terminal's menu in the Terminal menu pane, lowercased.
+const menuRemoved = async ($: EngineInterface) => ((await $.store.get('menuRemoved')) ?? []) as string[]
+
+// Keeps Windows Terminal's menu in step with the project folders the toolkit has seen and their colors, leaving out
+// those removed in the Terminal menu pane. Written only when it changes.
 async function writeMenu($: EngineInterface) {
   try {
     const appData = await $.env.get('LOCALAPPDATA')
     if (!appData) return
-    const colors = ((await $.store.get('projectColors')) ?? {}) as Record<string, string>
-    const dirs = ((await $.store.get('projectDirs')) ?? {}) as ProjectDirs
-    const home = ((await $.env.get('USERPROFILE')) ?? '').toLowerCase().replace(/[\\/]+$/, '')
-    // A network location, which the engine won't check, counts as not there.
-    const isThere = (path: string) => $.fs.exists(path).catch(() => false)
-    let isNew = false
-    for (const lower of Object.keys(colors)) {
-      if (lower in dirs) continue
-      const dir = lower === home ? null : await pathOnDisk($, lower).catch(() => null)
-      const isProject = dir !== null && ((await isThere(`${dir}\\CLAUDE.md`)) || (await isThere(`${dir}\\.claude\\CLAUDE.md`)))
-      dirs[lower] = isProject ? dir : null
-      isNew = true
-    }
-    if (isNew) await $.store.set('projectDirs', dirs)
-    const projects: { dir: string; color: string }[] = []
-    for (const [lower, dir] of Object.entries(dirs)) {
-      const color = colors[lower]
-      if (dir !== null && color !== undefined && (await isThere(dir))) projects.push({ dir, color })
-    }
+    const removed = await menuRemoved($)
+    const projects = (await menuProjects($)).filter(p => !removed.includes(p.key))
     const script = `${$.plugin.root}/scripts/new-tab.ps1`.replace(/\//g, '\\')
     const text = menuText(projects, script)
     const path = `${appData}\\${FRAGMENT_DIR}\\${FRAGMENT_FILE}`
     const old = await $.fs.read(path).catch(() => null)
     if (old !== text && (old !== null || projects.length > 0)) await $.fs.write(path, text)
   } catch {}
+}
+
+// The Terminal menu pane's list: every project Windows Terminal's menu can list, sorted by name as the menu is, each
+// marked if it's been removed.
+async function showMenu($: EngineInterface) {
+  try {
+    const removed = await menuRemoved($)
+    const entries: ToolkitMenuEntry[] = (await menuProjects($))
+      .map(p => ({
+        key: p.key,
+        dir: p.dir,
+        name: p.dir.split(/[\\/]/).pop() || p.dir,
+        color: currentColor(p.color) ?? p.color,
+        isRemoved: removed.includes(p.key),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    await update($, menuA, () => entries)
+  } catch {}
+}
+
+async function openMenu($: EngineInterface) {
+  await showMenu($)
+  await $.ui.open({ id: MENU_PANE, title: "Terminal's menu", focus: true, closeOnEscape: true })
+}
+
+// Remove takes a project out of Windows Terminal's menu, and it stays out, even when Claude starts there again, until
+// Add back puts it back.
+async function setMenuRemoved($: EngineInterface, key: string, isRemoved: boolean) {
+  try {
+    const removed = (await menuRemoved($)).filter(k => k !== key)
+    await $.store.set('menuRemoved', isRemoved ? [...removed, key] : removed)
+  } catch {}
+  await writeMenu($)
+  await showMenu($)
 }
 
 async function compactFromNudge($: EngineInterface) {
@@ -2736,14 +2787,21 @@ export const register: Register = (on, options) => {
       HELPER_MODES[(HELPER_MODES.findIndex(m => m.key === helperMode) + 1) % HELPER_MODES.length]?.key ?? 'lowest'
     const helperLabel = HELPER_MODES.find(m => m.key === helperMode)?.[isNarrow ? 'short' : 'label'] ?? ''
 
-    const rule = (title: string) => {
-      const spaced = title.split('').join(' ')
-      return (
-        <Text dimColor wrap="truncate-end">
-          ── {spaced} {'─'.repeat(Math.max(0, inner - spaced.length - 4))}
-        </Text>
-      )
-    }
+    // A divider is clipped to one row, as the gray rows are, so it stops at the box's edge where the box is narrower
+    // than bodyColumns says (the Claude app): it can't spill onto a second row or end in "…".
+    const divider = () => (
+      <Box height={1} overflow="hidden" flexShrink={0}>
+        <Text dimColor>{'─'.repeat(inner)}</Text>
+      </Box>
+    )
+    const rule = (title: string) => (
+      <Box height={1} overflow="hidden" flexShrink={0}>
+        <Box flexShrink={0}>
+          <Text dimColor>{`── ${title.split('').join(' ')} `}</Text>
+        </Box>
+        {divider()}
+      </Box>
+    )
     // A model or effort: the one in use sits on a colored block.
     const chip = (key: string, label: string, isPicked: boolean, color: string, onPress: () => void, isDim = false) => (
       <Button key={key} plain dimColor={isDim} onPress={onPress}>
@@ -2786,7 +2844,7 @@ export const register: Register = (on, options) => {
               <Button key="minimize" label="▾" plain onPress={() => setControlsOpen($, false)} />
             </Box>
           </Box>
-          <Text dimColor>{'─'.repeat(inner)}</Text>
+          {divider()}
           <Box>
             <Box width={LABEL_WIDTH} flexShrink={0}>
               <Text dimColor>MODEL</Text>
@@ -2921,6 +2979,58 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: HELP_PANE }, async ($, e) => {
     const { Markdown } = $.ui.resolve(e)
     return <Markdown text={HELP} />
+  })
+
+  // Terminal's menu: each project with its color swatch, folder name, and folder, and Remove or Add back.
+  on('ui.render', { component: 'Pane', requestId: MENU_PANE }, async ($, e) => {
+    const entries = await read($, menuA)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    if (entries == null) return <Text dimColor>Reading the menu…</Text>
+    const shown = entries.filter(m => !m.isRemoved)
+    const removed = entries.filter(m => m.isRemoved)
+    const nameWidth = Math.max(0, ...entries.map(m => m.name.length))
+    const row = (m: ToolkitMenuEntry) => (
+      <Box gap={1}>
+        {m.isRemoved ? (
+          <Text dimColor>░░</Text>
+        ) : (
+          <Text backgroundColor={PROJECT_COLORS.find(c => c.key === m.color)?.hex}>{'  '}</Text>
+        )}
+        <Box width={nameWidth} flexShrink={0}>
+          <Text dimColor={m.isRemoved}>{m.name}</Text>
+        </Box>
+        <Box flexGrow={1} flexShrink={1}>
+          <Text dimColor wrap="truncate-end">
+            {m.dir}
+          </Text>
+        </Box>
+        <Button
+          key={`menu-${m.isRemoved ? 'add' : 'remove'}-${m.key}`}
+          label={m.isRemoved ? 'Add back' : 'Remove'}
+          variant="secondary"
+          onPress={() => setMenuRemoved($, m.key, !m.isRemoved)}
+        />
+      </Box>
+    )
+    return (
+      <Box flexDirection="column" gap={1}>
+        <Text bold color="claude">
+          Terminal's menu
+        </Text>
+        <Text>Each project here has an entry in the ∨ menu next to Terminal's +. It opens a tab there, in the project's color, with Claude running.</Text>
+        {entries.length === 0 ? (
+          <Text dimColor>No projects yet. A folder with its own CLAUDE.md joins the first time Claude starts there.</Text>
+        ) : null}
+        {shown.length > 0 ? <Box flexDirection="column">{shown.map(row)}</Box> : null}
+        {removed.length > 0 ? (
+          <Box flexDirection="column">
+            <Text dimColor>Removed</Text>
+            {removed.map(row)}
+          </Box>
+        ) : null}
+        <Text dimColor>Terminal shows a change the next time it starts. A project whose folder is gone leaves the menu by itself.</Text>
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: REPORT_PANE }, async ($, e) => {

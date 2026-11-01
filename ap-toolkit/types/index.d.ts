@@ -153,6 +153,11 @@ export type ToolkitHelperMode = 'lowest' | 'fast' | 'same'
 // and `isOutside` is true.
 export type ToolkitProject = { name: string; dir: string; color: string; isOutside?: boolean }
 
+// One project in the Terminal menu pane: its folder in lowercase (`key`) and as written on disk, its folder's name, its
+// color's key, and whether it's been removed from Windows Terminal's menu. Removed folders are kept in $.store as
+// `menuRemoved`, by `key`.
+export type ToolkitMenuEntry = { key: string; dir: string; name: string; color: string; isRemoved: boolean }
+
 // One helper agent in the work view: its task and model, what it's doing now, its new tokens (in and out, without
 // cache re-reads), and their cost estimated from model prices. `parentId` names the helper that started it; absent
 // when Claude did.
@@ -201,6 +206,7 @@ declare module 'claude-code' {
       shells: ToolkitShell[]
       stopArmed: string | null
       project: ToolkitProject | null
+      menu: ToolkitMenuEntry[] | null
     }
   }
 }
