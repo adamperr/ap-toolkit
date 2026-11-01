@@ -1619,7 +1619,7 @@ async function noteProjectDir($: EngineInterface, dir: string) {
   } catch {}
 }
 
-// A folder's path as written on disk, from a lowercased one, such as E:\ClaudeMods from e:\claudemods; null when it
+// A folder's path as written on disk, from a lowercased one, such as D:\MyProject from d:\myproject; null when it
 // isn't there.
 async function pathOnDisk($: EngineInterface, lower: string): Promise<string | null> {
   const [drive, ...parts] = lower.split(/[\\/]+/).filter(Boolean)
