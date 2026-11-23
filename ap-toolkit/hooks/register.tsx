@@ -43,6 +43,8 @@ const helperModeA = atom({ plugin: 'ap-toolkit', key: 'helperMode' } as const, '
 const reportA = atom({ plugin: 'ap-toolkit', key: 'report' } as const, null)
 const nudgeA = atom({ plugin: 'ap-toolkit', key: 'nudge' } as const, null)
 const nudgeDismissedA = atom({ plugin: 'ap-toolkit', key: 'nudgeDismissed' } as const, [])
+// When Claude's last reply finished; null while Claude works and before the first reply.
+const lastReplyA = atom({ plugin: 'ap-toolkit', key: 'lastReply' } as const, null)
 const folderWarningA = atom({ plugin: 'ap-toolkit', key: 'folderWarning' } as const, null)
 const clearArmedA = atom({ plugin: 'ap-toolkit', key: 'clearArmed' } as const, false)
 const versionA = atom({ plugin: 'ap-toolkit', key: 'version' } as const, null)
@@ -51,10 +53,15 @@ const shellsA = atom({ plugin: 'ap-toolkit', key: 'shells' } as const, [])
 const stopArmedA = atom({ plugin: 'ap-toolkit', key: 'stopArmed' } as const, null)
 const projectA = atom({ plugin: 'ap-toolkit', key: 'project' } as const, null)
 const menuA = atom({ plugin: 'ap-toolkit', key: 'menu' } as const, null)
+const remoteA = atom({ plugin: 'ap-toolkit', key: 'remote' } as const, null)
 
 // The wrap-up nudge shows once context or the 5-hour limit reaches these, and again after it drops back and returns.
 const NUDGE_CONTEXT = 75
 const NUDGE_FIVE_HOUR = 85
+// The "Welcome back" nudge: Claude Code keeps a conversation cached for an hour after the last reply, so the first
+// message after that rereads all of it at full price. It shows for a conversation at least this long.
+const AWAY_MS = 60 * 60_000
+const AWAY_TOKENS = 50_000
 
 // "Needs you" alerts: a request at least this long gets an alert when it finishes.
 const LONG_RUN_MS = 2 * 60_000
@@ -66,6 +73,11 @@ const POWERSHELL = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass'
 
 // Clear, and Stop on a helper's card, count a second press within this long of the first.
 const CLEAR_ARM_MS = 5_000
+
+// Remote Control: Claude Code's own /config row for "Enable Remote Control for all sessions" (a choice of true, false,
+// or default), and the command that connects a tab.
+const REMOTE_ROW = 'remoteControl'
+const REMOTE_COMMAND = 'remote-control'
 
 const REPORT_PANE = 'report'
 const MENU_PANE = 'terminal-menu'
@@ -152,6 +164,7 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **Terminal menu** | Lists each project in Windows Terminal's **∨** menu, with **Remove** next to it. A removed project stays out of the menu, even when Claude starts there again, until you press **Add back**. Terminal shows a change the next time it starts. A project whose folder is gone leaves the menu by itself. |
 | **Helper agents** | Which model helper agents run on. Each press of its pill moves to the next: **Lowest that fits** lets Claude pick per task, **Fast & Cheap** uses Haiku, and **Same as me** uses Claude's own model. |
 | **Clean View** | Hides tool output (reads, edits, and commands), so Claude's words stand out. Questions and plans for your OK stay. The work view above the strip shows either way. |
+| **Remote Control** | Claude Code's own **Enable Remote Control for all sessions** setting. On, every tab you open from then on connects by itself, so you can pick up any session in the Claude app on your phone or at claude.ai/code, and this tab connects right away. A tab that was already open connects when it restarts. Off stops new tabs from connecting; a connected tab stays connected until you close it. While a session is connected, its conversation is stored on Anthropic's servers. Your PC must stay awake with the tab open. The row hides where Remote Control isn't available or your organization locks it. |
 | **On / Off pills** | Press the pill at the right of a setting to switch it. The dot beside the setting turns green while it's on. |
 | **Start session** | Asks Claude to read the project map and tell you where things stand. |
 | **New tab** | Opens a Windows Terminal tab in this folder, named for the project and in its color, and starts a fresh Claude session there, with an empty box. Claude Code leaves that tab's name alone. Tabs you open yourself stay plain and read **Claude Code**. |
@@ -163,7 +176,7 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **Status row** | The end of the gray hint line under the prompt: model, effort, and helpers working. |
 | **"Needs you" alerts** | A Windows notification when Claude asks a question, wants a plan OK or a permission, or finishes a request that took 2 minutes or more. The title names the project, such as **ClaudeMods needs you**, or reads **Claude needs you** outside a project folder. Turn them off in \`/config\`. |
 | **⚠ Folder check** | Warns when a session starts outside a project folder (one with its own CLAUDE.md). **Got it** hides it for this session. |
-| **⚠ Wrap-up nudge** | Shows when context reaches 75% or the 5-hour limit reaches 85%, with **Compact** and **Clear**. **Not now** hides it until the reading drops and climbs back. |
+| **⚠ Wrap-up nudge** | Shows when context reaches 75% or the 5-hour limit reaches 85%, with **Compact** and **Clear**. **Not now** hides it until the reading drops and climbs back. It also shows when you come back after an hour away from a conversation over 50K tokens, since your next message rereads all of it at full price; **Not now** hides that one until your next hour away. |
 | **Version** | The dim number in the controls box's bottom-right corner, such as v0.1.20: the second number is the major release, and the third is the batch in the project plan. A tab that shows an older number hasn't loaded the latest changes; restart it. |
 
 To change the report's hourly rate, open \`/config\`. Press **Esc** to close this help.`
@@ -214,7 +227,8 @@ const FAILED_KEPT = 3
 const COMMAND_KEPT = 200
 const WORK_COLUMN = 32
 // The rows the controls box takes when open: its border, title, divider, Model, Effort, two settings under their rule,
-// three Launch rows under theirs, and the version row. Once the folder check has run, the Color row adds one.
+// three Launch rows under theirs, and the version row. Once the folder check has run, the Color row adds one, and the
+// Remote Control setting adds one where it shows.
 const CONTROLS_ROWS = 14
 // How a finished helper's line is marked: done, stopped, or failed.
 const endMark = (a: ToolkitAgent) =>
@@ -883,6 +897,43 @@ async function setHelperMode($: EngineInterface, value: ToolkitHelperMode) {
   } catch {}
 }
 
+// Reads Claude Code's always-on Remote Control setting for the Settings row. The row shows only where this build has
+// the setting and the command and no policy locks the setting; elsewhere it's null and the row hides.
+async function noteRemote($: EngineInterface) {
+  try {
+    const row = (await $.config.list()).find(r => r.key === REMOTE_ROW)
+    const hasCommand = (await $.command.list()).some(c => c.name === REMOTE_COMMAND)
+    const value = row === undefined || row.isLocked || !hasCommand ? null : row.value === 'true'
+    await update($, remoteA, () => value)
+  } catch {}
+}
+
+// On sets the always-on setting and connects this tab too, since the setting only takes hold in tabs that start after
+// it. Off sets the setting; a connected tab stays connected until it closes.
+async function setRemote($: EngineInterface, value: boolean) {
+  try {
+    const set = await $.config.set({ key: REMOTE_ROW, value: value ? 'true' : 'false' })
+    if (set.deny !== undefined) {
+      $.ui.toast(`Couldn't change Remote Control: ${set.deny}`)
+      return
+    }
+    await update($, remoteA, () => value)
+  } catch {
+    $.ui.toast("Couldn't change Remote Control.")
+    return
+  }
+  if (!value) {
+    $.ui.toast('Remote Control is off for new tabs. Connected tabs stay connected until you close them.')
+    return
+  }
+  try {
+    await $.command.run({ command: REMOTE_COMMAND })
+    $.ui.toast('Remote Control is on for every new tab, and for this one.')
+  } catch {
+    $.ui.toast("Remote Control is on for every new tab. This tab couldn't connect; restart it to connect it.")
+  }
+}
+
 export function short(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${Math.round(n / 1_000)}K`
@@ -1495,33 +1546,65 @@ async function launch($: EngineInterface, key: string) {
   }
 }
 
-// Which nudge shows for these readings; a dismissed one stays away until its reading drops below the line.
-export function nudgeFor(context: number | null, fiveHour: number | null, dismissed: readonly string[]) {
+// Which nudge shows for these readings; a dismissed one stays away until its reading drops below the line. `away` is
+// when Claude last replied (`since`), the conversation's tokens, and the time now: an hour away from a long
+// conversation comes first, and a dismissed one stays away until the next message and another hour away.
+export function nudgeFor(
+  context: number | null,
+  fiveHour: number | null,
+  dismissed: readonly string[],
+  away: { since: number | null; tokens: number | null; now: number } | null = null,
+) {
   const isContext = context !== null && context >= NUDGE_CONTEXT
   const isFiveHour = fiveHour !== null && fiveHour >= NUDGE_FIVE_HOUR
-  const stillDismissed = dismissed.filter(r => (r === 'context' ? isContext : isFiveHour))
+  const welcome: ToolkitNudge | null =
+    away !== null && away.since !== null && away.tokens !== null && away.tokens >= AWAY_TOKENS && away.now - away.since >= AWAY_MS
+      ? { reason: 'away', since: away.since, tokens: away.tokens }
+      : null
+  const stillDismissed = dismissed.filter(r => (r === 'context' ? isContext : r === 'away' ? welcome !== null : isFiveHour))
   let nudge: ToolkitNudge | null = null
-  if (isContext && context !== null && !stillDismissed.includes('context')) nudge = { reason: 'context', percent: context }
+  if (welcome !== null && !stillDismissed.includes('away')) nudge = welcome
+  else if (isContext && context !== null && !stillDismissed.includes('context')) nudge = { reason: 'context', percent: context }
   else if (isFiveHour && fiveHour !== null && !stillDismissed.includes('fiveHour')) {
     nudge = { reason: 'fiveHour', percent: fiveHour }
   }
   return { nudge, dismissed: stillDismissed }
 }
 
-export function nudgeText(n: ToolkitNudge): string {
+export function nudgeText(n: ToolkitNudge, now = 0): string {
+  if (n.reason === 'away') {
+    // Kept as short as the context nudge's text, so it fits beside the three buttons at 110 columns.
+    return `Away ${duration(now - n.since)}. Your next message rereads ${amount(n.tokens)} tokens at full price.`
+  }
   return n.reason === 'context'
     ? `Context is ${n.percent}% full. Wrap up now so the next session starts fresh.`
     : `You've used ${n.percent}% of your 5-hour limit. It's a good time to wrap up.`
 }
 
-// Called after each context or 5-hour reading; a nudge that just appeared also shows once as a toast.
+// Called after each context or 5-hour reading, and when a turn starts; a limit's nudge that just appeared also shows
+// once as a toast. The "Welcome back" one doesn't: nobody's there to see it.
 async function checkNudge($: EngineInterface) {
   try {
-    const found = nudgeFor(await read($, contextA), await read($, fiveHourA), (await read($, nudgeDismissedA)) ?? [])
+    const away = {
+      since: await read($, lastReplyA),
+      tokens: (await read($, usageA))?.contextTokens ?? null,
+      now: (await read($, nowA)) ?? 0,
+    }
+    const found = nudgeFor(await read($, contextA), await read($, fiveHourA), (await read($, nudgeDismissedA)) ?? [], away)
     const before = await read($, nudgeA)
     await update($, nudgeDismissedA, () => found.dismissed)
     await update($, nudgeA, () => found.nudge)
-    if (found.nudge !== null && before?.reason !== found.nudge.reason) $.ui.toast(nudgeText(found.nudge))
+    if (found.nudge !== null && found.nudge.reason !== 'away' && before?.reason !== found.nudge.reason) {
+      $.ui.toast(nudgeText(found.nudge))
+    }
+  } catch {}
+}
+
+// Called each minute by the strip's timer: once Claude's last reply is an hour old, the nudge takes it from there.
+async function checkAway($: EngineInterface) {
+  try {
+    const since = await read($, lastReplyA)
+    if (since != null && ((await read($, nowA)) ?? 0) - since >= AWAY_MS) await checkNudge($)
   } catch {}
 }
 
@@ -1832,6 +1915,8 @@ async function setControlsOpen($: EngineInterface, value: boolean) {
   try {
     await $.store.set('controlsOpen', value)
   } catch {}
+  // Another tab may have changed the Remote Control setting since this one read it.
+  if (value) await noteRemote($)
 }
 
 export const register: Register = (on, options) => {
@@ -1873,6 +1958,7 @@ export const register: Register = (on, options) => {
       const names = (await $.command.list()).map(c => c.name)
       await update($, hasEffortA, () => names.includes('effort'))
     } catch {}
+    await noteRemote($)
     // The panel's version tag comes from plugin.json, so a batch bumps it in one place.
     try {
       const manifest = JSON.parse(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)) as { version?: unknown }
@@ -1890,6 +1976,7 @@ export const register: Register = (on, options) => {
         void $.clock
           .now()
           .then(now => update($, nowA, old => Math.max(old, now)))
+          .then(() => checkAway($))
           .catch(() => {})
       })
     } catch {}
@@ -1913,6 +2000,16 @@ export const register: Register = (on, options) => {
     } catch {
       return { text: "Today's report couldn't open." }
     }
+  })
+
+  // A change to the Remote Control setting in /config shows on the Settings row; the toolkit's own change doesn't come
+  // through here.
+  on('config.set', { key: REMOTE_ROW }, async ($, e, next) => {
+    const result = await next(e)
+    try {
+      if (result.deny === undefined) await update($, remoteA, old => (old === null ? null : result.value === 'true'))
+    } catch {}
+    return result
   })
 
   on('session.measure', async ($, e, next) => {
@@ -1982,6 +2079,9 @@ export const register: Register = (on, options) => {
       await update($, todosA, old => ((old ?? []).every(t => t.status === 'completed') ? [] : (old ?? [])))
       await update($, nowA, () => now)
       startTicker($)
+      // A new message warms the cache again, so the "Welcome back" nudge goes until the next hour away.
+      await update($, lastReplyA, () => null)
+      await checkNudge($)
     } catch {}
     return next(e)
   })
@@ -1996,6 +2096,7 @@ export const register: Register = (on, options) => {
       await recordTurn($, e.durationMs, e.usage, run)
       try {
         const now = await $.clock.now()
+        await update($, lastReplyA, () => now)
         const todos = (await read($, todosA)) ?? []
         const tokens = await countSessionTokens($, true)
         let usd = (await read($, usageA))?.costUsd ?? null
@@ -2208,6 +2309,7 @@ export const register: Register = (on, options) => {
     const stopArmed = await read($, stopArmedA)
     const project = await read($, projectA)
     const projectColor = PROJECT_COLORS.find(c => c.key === project?.color)
+    const remote = await read($, remoteA)
     const { Box, Button, Text } = $.ui.resolve(e)
 
     const isNarrow = e.props.bodyColumns < NARROW
@@ -2455,7 +2557,7 @@ export const register: Register = (on, options) => {
       nudge == null ? null : (
         <Box gap={1} justifyContent="flex-end">
           <Text color="warning" wrap="truncate-end">
-            ⚠ {nudgeText(nudge)}
+            ⚠ {nudgeText(nudge, now ?? 0)}
           </Text>
           <Button key="nudge-compact" label="Compact" variant="primary" onPress={() => compactFromNudge($)} />
           <Button key="nudge-clear" label={clearArmed ? 'Sure? Clear' : 'Clear'} onPress={() => pressClear($, true)} />
@@ -2523,7 +2625,8 @@ export const register: Register = (on, options) => {
         ? 'Context shows after first reply'.length
         : `Context ${' '.repeat(METER)} ${Math.round(contextShown)}%  ${amount(usage.contextTokens ?? 0)}/${amount(usage.contextWindow)}`
             .length
-    const modelWidth = `${modelLabel(model)}${takesEffort && effortLabel(effort) ? ` · ${effortLabel(effort)}` : ''}`.length + 2
+    const modelWidth =
+      `${modelLabel(model)}${takesEffort && effortLabel(effort) ? ` · ${effortLabel(effort)}` : ''}`.length + 2
     const limitWidth = (name: string, l: ToolkitLimit) => {
       const t = limitText(l, now)
       return `${name} ${' '.repeat(METER)} ${t.left}${t.note ? ` · ${t.note}` : ''}`.length
@@ -2647,7 +2750,7 @@ export const register: Register = (on, options) => {
       const shellKeys = (status: readonly ToolkitShell['status'][]) =>
         shells.filter(s => status.includes(s.status)).map(s => `shell:${s.id}`)
       const kept = fitParts(
-        e.props.maxRows - (folderWarning == null ? 0 : 1) - (nudge == null ? 0 : 1) - (isControlsShown ? CONTROLS_ROWS + (project == null ? 0 : 1) : 0) - stripRows,
+        e.props.maxRows - (folderWarning == null ? 0 : 1) - (nudge == null ? 0 : 1) - (isControlsShown ? CONTROLS_ROWS + (project == null ? 0 : 1) + (remote == null ? 0 : 1) : 0) - stripRows,
         parts,
         [
           'gray',
@@ -2927,6 +3030,11 @@ export const register: Register = (on, options) => {
           {setting('Helper agents', 'model they use', false, `helpers-${nextHelper}`, helperLabel, () =>
             setHelperMode($, nextHelper),
           )}
+          {remote == null
+            ? null
+            : setting('Remote Control', 'your phone can open any tab', remote, remote ? 'remote-off' : 'remote-on', remote ? '● On' : '○ Off', () =>
+                setRemote($, !remote),
+              )}
           {rule('LAUNCH')}
           {launchRows.map(row => (
             <Box>

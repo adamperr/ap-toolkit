@@ -94,8 +94,11 @@ export type ToolkitUsage = {
   limits: ToolkitLimit[]
 }
 
-// The wrap-up nudge on show: which limit is near, and how full it is.
-export type ToolkitNudge = { reason: 'context' | 'fiveHour'; percent: number }
+// The wrap-up nudge on show: which limit is near, and how full it is. Or, after an hour away from a long conversation
+// (`away`), when Claude last replied and how many tokens the next message rereads.
+export type ToolkitNudge =
+  | { reason: 'context' | 'fiveHour'; percent: number }
+  | { reason: 'away'; since: number; tokens: number }
 
 // What the report pane draws: one period's totals, worked out when the tab is picked. `allCostUsd` is every day's
 // cost, from `firstDay` on; `months` is the period's cost per month, on the Year and All time tabs; `byTimeUsd` is how
@@ -199,6 +202,7 @@ declare module 'claude-code' {
       report: ToolkitReport | null
       nudge: ToolkitNudge | null
       nudgeDismissed: string[]
+      lastReply: number | null
       folderWarning: string | null
       clearArmed: boolean
       version: string | null
@@ -207,6 +211,7 @@ declare module 'claude-code' {
       stopArmed: string | null
       project: ToolkitProject | null
       menu: ToolkitMenuEntry[] | null
+      remote: boolean | null
     }
   }
 }
