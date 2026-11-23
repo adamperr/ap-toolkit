@@ -224,7 +224,7 @@ export const MODELS = [
   { key: 'haiku', label: 'Haiku 5.5', short: 'Haiku', id: 'claude-haiku-5-5' },
   { key: 'sonnet', label: 'Sonnet 5.5', short: 'Sonnet', id: 'claude-sonnet-5-5' },
   { key: 'opus', label: 'Opus 5.5', short: 'Opus', id: 'claude-opus-5-5' },
-  { key: 'fable', label: 'Fable 5.1', short: 'Fable', id: 'claude-fable-5-1' },
+  { key: 'fable', label: 'Fable 5.2', short: 'Fable', id: 'claude-fable-5-2' },
 ]
 
 export const EFFORTS = [
