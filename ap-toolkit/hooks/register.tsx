@@ -270,6 +270,12 @@ const PANEL_FRAME = 4
 const LABEL_WIDTH = 10
 const NAME_WIDTH = 17
 
+// The box's title row: the title, the fewest cells of the project's name worth showing after it, and the cells the
+// rest of the row takes (a space, "· ", a space, and the ? and ▾ buttons).
+const TITLE = '◆ A P   T O O L K I T'
+const TITLE_NAME_MIN = 4
+const TITLE_ROW_REST = 8
+
 // The strip above the prompt: its label column, the cells in each bar, and the eighths a bar's last cell fills by.
 const STRIP_LABEL = 11
 const METER = 8
@@ -2783,6 +2789,12 @@ export const register: Register = (on, options) => {
     const colorRow = (cells: number) =>
       LABEL_WIDTH + PROJECT_COLORS.length * (cells + 1) + Math.max(...PROJECT_COLORS.map(c => c.label.length))
     const isSlim = inner < colorRow(3)
+    // The project's name follows the title, bold and in its color, where the row has room for the title, "· ", at
+    // least TITLE_NAME_MIN cells of the name, and the ? and ▾ buttons. A longer name is cut with "…".
+    const titleName =
+      project != null && projectColor && inner >= TITLE.length + TITLE_NAME_MIN + TITLE_ROW_REST
+        ? { name: project.name, hex: projectColor.hex }
+        : null
     const nextHelper =
       HELPER_MODES[(HELPER_MODES.findIndex(m => m.key === helperMode) + 1) % HELPER_MODES.length]?.key ?? 'lowest'
     const helperLabel = HELPER_MODES.find(m => m.key === helperMode)?.[isNarrow ? 'short' : 'label'] ?? ''
@@ -2836,9 +2848,25 @@ export const register: Register = (on, options) => {
       <Box justifyContent="flex-end">
         <Box flexDirection="column" width={width} borderStyle="round" borderColor="warning" paddingX={1}>
           <Box justifyContent="space-between" gap={1}>
-            <Text color="claude" bold wrap="truncate-end">
-              ◆ A P   T O O L K I T
-            </Text>
+            {titleName !== null ? (
+              <Box gap={1} flexShrink={1}>
+                <Box flexShrink={0}>
+                  <Text color="claude" bold>
+                    {TITLE}
+                  </Text>
+                </Box>
+                <Text wrap="truncate-end">
+                  <Text dimColor>· </Text>
+                  <Text color={titleName.hex} bold>
+                    {titleName.name}
+                  </Text>
+                </Text>
+              </Box>
+            ) : (
+              <Text color="claude" bold wrap="truncate-end">
+                {TITLE}
+              </Text>
+            )}
             <Box gap={2} flexShrink={0}>
               <Button key="help" label="?" plain onPress={() => openHelp($)} />
               <Button key="minimize" label="▾" plain onPress={() => setControlsOpen($, false)} />
