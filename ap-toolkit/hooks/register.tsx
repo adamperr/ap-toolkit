@@ -17,6 +17,7 @@ import type {
   ToolkitReport,
   ToolkitRun,
   ToolkitShell,
+  ToolkitTime,
   ToolkitTodo,
 } from '../types'
 
@@ -54,6 +55,8 @@ const stopArmedA = atom({ plugin: 'ap-toolkit', key: 'stopArmed' } as const, nul
 const projectA = atom({ plugin: 'ap-toolkit', key: 'project' } as const, null)
 const menuA = atom({ plugin: 'ap-toolkit', key: 'menu' } as const, null)
 const remoteA = atom({ plugin: 'ap-toolkit', key: 'remote' } as const, null)
+const NO_TIME: ToolkitTime = { claudeMs: 0, helperMs: 0, waitMs: 0 }
+const timeA = atom({ plugin: 'ap-toolkit', key: 'time' } as const, NO_TIME)
 
 // The wrap-up nudge shows once context or the 5-hour limit reaches these, and again after it drops back and returns.
 const NUDGE_CONTEXT = 75
@@ -150,17 +153,19 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **◆ Project name** | The strip's first line, above the prompt. It starts with this project's folder name, bold and in the project's color, or **Session** outside a project folder. Tokens are what Claude read new and wrote this session, helpers included; cache re-reads are left out, and Today's report still shows them. **At API prices** is Claude Code's own \`/cost\` figure: what the session would cost on the API, which your plan doesn't bill. **Context** is how full the conversation is. ◆ beats while Claude works. |
 | **Limits** | The strip's second line: how much of the 5-hour and weekly windows is left, and when each resets. When your pace would use up the 5-hour window before it resets, it says when, in amber, and still shows the reset time. Where the line is short of room, the notes get shorter so both windows stay on one line, and during a pace warning the week's reset time steps aside. |
 | **While Claude works** | The strip's first line keeps the session's tokens and cost and the model. Its second line holds the three bars together: the context bar (how full it is), then the 5-hour bar with its reset time and the week bar (how much is left). Context's token count and the week's reset time come back when Claude finishes. A pace warning turns the 5-hour figure amber until then. |
+| **Request clock** | While Claude works, **this request** on the strip's first line counts from when you pressed Enter. Where that line is short of room, it sits beside the bars (always, in the Claude app). After Claude finishes, **last request** keeps the total where the line has room; the **Done** line always has it. |
 | **Bars** | A bar fills as you use it, and its color says how full it is: green under 50%, amber from 50% to 79%, and red from 80%. That's the only color code. |
 | **Steps** | Shows above the strip while Claude works. The bar has one segment per step on Claude's to-do list: green when done, orange with a moving shine for the step it's on, and gray for what's left. With no to-do list, it reads **Working**. The step's clock turns amber after 3 minutes. On the right are this turn's tokens so far, as **in** (read new) and **out** (written), then its cost, helpers included. The checklist sits under it. |
 | **Time** | When you sent the message, how long Claude has worked, and when it should finish: the average finished step times the steps left. The estimate shows once a step finishes; without a to-do list, there's none. |
 | **Now** | What Claude is doing right now. It turns amber after 3 minutes on one thing. |
 | **Shells** | Each command Claude runs: ◐ running, ✓ worked, or ✗ failed with its exit code, then the command, the reason Claude gave, and its time. The newest 3 show, plus any that failed, until your next message. One that runs over 2 minutes turns amber. |
 | **Helpers** | One line per helper agent: its model, task, what it's doing now, tokens, cost at API prices (estimated from its tokens and model prices), and time. A helper's own helpers sit under it with ↳. **■** stops a working helper; press it twice within 5 seconds. A finished helper keeps its line until your next message. |
-| **Done** | After Claude finishes: when the turn started and ended, how long it took, how many shells and helpers ran, and the turn's tokens and cost. It stays until your next message, along with any helper still working. |
+| **Done** | After Claude finishes: when the turn started and ended, how long it took by the clock (from Enter to done), how many shells and helpers ran, and the turn's tokens and cost. It stays until your next message, along with any helper still working. |
 | **Motion** | While Claude works, a new or changed part lights up briefly, numbers count up, bars fill smoothly, and ◆ beats. |
 | **Model** | Switches Claude's model. A pick made while Claude works applies when it finishes. |
 | **Effort** | How hard Claude thinks. Grayed out on models that don't use it. |
 | **Color** | This project's color, marked ✓, on its name in the strip, on tabs **New tab** opens, and on its entry in Windows Terminal's menu. Each project gets one of 12 on its own, the one fewest projects have; press a swatch to change it. Other tabs open in this project change when they restart. Outside a project folder, it's the color of the folder Claude Code started in. |
+| **Time in the box** | The controls box's last row: this session's time. **Claude** is your requests from Enter to done, less the time Claude waited on your answers, which shows as **waited on you**. **helpers** adds up each helper's working time; helpers run side by side, so it can pass the clock. /clear starts it over. Today's report keeps helper time too. |
 | **Terminal's menu** | Each project folder the toolkit has seen has an entry in the **∨** menu next to Windows Terminal's **+**. It opens a tab in that folder, named for the project and in its color, with Claude running. A new project or color shows after Terminal restarts. **Terminal menu** lists them all, to remove one or add it back. |
 | **Terminal menu** | Lists each project in Windows Terminal's **∨** menu, with **Remove** next to it. A removed project stays out of the menu, even when Claude starts there again, until you press **Add back**. Terminal shows a change the next time it starts. A project whose folder is gone leaves the menu by itself. |
 | **Helper agents** | Which model helper agents run on. Each press of its pill moves to the next: **Lowest that fits** lets Claude pick per task, **Fast & Cheap** uses Haiku, and **Same as me** uses Claude's own model. |
@@ -173,7 +178,7 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **Today's report** | Claude's time, type of work, and usage by day, week, month, year, or all time. Also \`/report\`. A request that changed files counts as Building. Time Claude waits on your answers isn't counted as work. Work from before the toolkit started counting comes from past session files; its cost is estimated from tokens and model prices. Tokens and cost include helper agents. **API cost** is what the period's work would cost at API prices, which your plan doesn't bill, then the total since the toolkit's first day; each type of work shows its share, and the Year and All time tabs list each month with a running total. The estimate check line compares that estimate with Claude Code's own cost for past sessions. |
 | **Clear** | Starts a fresh conversation in this tab, with the same folder and model. Press it twice: the first press asks **Sure?** |
 | **Compact** | Claude summarizes the conversation so far and carries on from the summary, which frees up context. It reads the whole conversation once. A toast says when it's done. |
-| **▴ ▾** | **▴** at the right of the strip opens the controls box (model, effort, settings, and Launch), and **▾** closes it. It remembers which. |
+| **▴ ▾** | **▴** at the right of the strip opens the controls box (model, effort, settings, Launch, and the session's time), and **▾** closes it. It remembers which. |
 | **Status row** | The end of the gray hint line under the prompt: model, effort, and helpers working. |
 | **"Needs you" alerts** | A Windows notification when Claude asks a question, wants a plan OK or a permission, or finishes a request that took 2 minutes or more. The title names the project, such as **ClaudeMods needs you**, or reads **Claude needs you** outside a project folder. Turn them off in \`/config\`. |
 | **⚠ Folder check** | Warns when a session starts outside a project folder (one with its own CLAUDE.md). **Got it** hides it for this session. |
@@ -777,6 +782,7 @@ async function startHelper($: EngineInterface, id: string, parentId: string | un
       tokens: 0,
       costUsd: 0,
     }
+    helperSince.delete(id)
     await update($, agentsA, old => [...(old ?? []).filter(a => a.id !== id), line])
     await update($, nowA, () => now)
     startTicker($)
@@ -829,10 +835,26 @@ async function updateAgent($: EngineInterface, id: string, change: (a: ToolkitAg
   } catch {}
 }
 
+// When each helper sent more work after it finished started working again, so its time counts from there. One not
+// listed counts from its line's start.
+const helperSince = new Map<string, number>()
+
+// A helper's working time, from when it last started to its end, into the session's Time row and today's report.
+async function addHelperTime($: EngineInterface, a: ToolkitAgent, now: number) {
+  const ms = Math.max(0, now - (helperSince.get(a.id) ?? a.startedAt))
+  helperSince.delete(a.id)
+  if (ms === 0) return
+  try {
+    await update($, timeA, t => ({ ...(t ?? NO_TIME), helperMs: (t ?? NO_TIME).helperMs + ms }))
+  } catch {}
+  await updateDay($, now, d => ({ ...d, helperMs: (d.helperMs ?? 0) + ms }))
+}
+
 // A helper's line shows how it ended; the clock stops once neither Claude nor a helper is working.
 async function endAgent($: EngineInterface, id: string, reason: string, usage: TurnTokens | undefined) {
   try {
     const now = await $.clock.now()
+    const was = ((await read($, agentsA)) ?? []).find(a => a.id === id)
     const status = reason === 'answer' ? 'done' : reason === 'aborted' ? 'stopped' : 'failed'
     // A helper the person stopped stays stopped, whatever its own end says.
     await updateAgent($, id, a => ({
@@ -842,6 +864,7 @@ async function endAgent($: EngineInterface, id: string, reason: string, usage: T
       endedAt: now,
       tokens: Math.max(a.tokens, newTokens(usage)),
     }))
+    if (was !== undefined && isWorking(was)) await addHelperTime($, was, now)
     if (!((await read($, agentsA)) ?? []).some(isWorking) && (await read($, runA)) == null) stopTicker()
   } catch {}
 }
@@ -877,15 +900,18 @@ async function pressStop($: EngineInterface, id: string) {
 // A line still working whose helper the engine lists as ended is marked ended, so a missed end can't keep it spinning.
 async function settleAgents($: EngineInterface) {
   try {
-    if (!((await read($, agentsA)) ?? []).some(isWorking)) return
+    const agents = (await read($, agentsA)) ?? []
+    if (!agents.some(isWorking)) return
     const listed = await $.agent.list()
     const now = await $.clock.now()
+    const endedOf = (a: ToolkitAgent) => (isWorking(a) ? ENDED[listed.find(l => l.id === a.id)?.status ?? ''] : undefined)
     await update($, agentsA, old =>
       (old ?? []).map(a => {
-        const status = ENDED[listed.find(l => l.id === a.id)?.status ?? '']
-        return isWorking(a) && status !== undefined ? { ...a, status, doing: '', endedAt: now } : a
+        const status = endedOf(a)
+        return status !== undefined ? { ...a, status, doing: '', endedAt: now } : a
       }),
     )
+    for (const a of agents.filter(a => endedOf(a) !== undefined)) await addHelperTime($, a, now)
   } catch {}
 }
 
@@ -1493,6 +1519,7 @@ async function showReport($: EngineInterface, tab: ReportTab) {
       fiveHour,
       week,
       waitMs: sum(d => d.waitMs ?? 0),
+      helperMs: sum(d => d.helperMs ?? 0),
       allCostUsd: dated.reduce((n, x) => n + x.d.costUsd, 0),
       allHasCost: !dated.some(x => isUncosted(x.d)),
       firstDay: counted.length === 0 ? null : counted.reduce((a, b) => (b < a ? b : a)),
@@ -2042,6 +2069,7 @@ export const register: Register = (on, options) => {
     if (e.reason === 'clear') {
       try {
         await update($, sessionTokensA, () => 0)
+        await update($, timeA, () => NO_TIME)
         await update($, usageA, old =>
           old === null ? null : { ...old, costUsd: 0, contextTokens: null, contextPercent: null },
         )
@@ -2053,7 +2081,11 @@ export const register: Register = (on, options) => {
   on('turn.start', async ($, e, next) => {
     if (e.agentId !== undefined) {
       await countHelpers($, { started: e.agentId })
-      // A helper that finished and is sent more work is working again.
+      // A helper that finished and is sent more work is working again, and its time counts from now.
+      try {
+        const was = ((await read($, agentsA)) ?? []).find(a => a.id === e.agentId)
+        if (was !== undefined && !isWorking(was)) helperSince.set(e.agentId, await $.clock.now())
+      } catch {}
       await updateAgent($, e.agentId, a => {
         if (isWorking(a)) return a
         const { endedAt: _, ...rest } = a
@@ -2127,8 +2159,18 @@ export const register: Register = (on, options) => {
             ? (old ?? []).map(s => (s.status === 'running' ? { ...s, status: missed, endedAt: now } : s))
             : (old ?? []),
         )
+        // The request's time by the clock, from Enter to done (Batch 56). Claude Code's own figure can run shorter.
+        const tookMs = run == null ? e.durationMs : Math.max(0, now - run.startedAt)
+        if (run != null) {
+          const waited = Math.min(tookMs, run.waitMs ?? 0)
+          await update($, timeA, t => ({
+            ...(t ?? NO_TIME),
+            claudeMs: (t ?? NO_TIME).claudeMs + tookMs - waited,
+            waitMs: (t ?? NO_TIME).waitMs + waited,
+          }))
+        }
         const done: ToolkitDone = {
-          tookMs: e.durationMs,
+          tookMs,
           completed: todos.filter(t => t.status === 'completed').length,
           total: todos.length,
           isAborted: e.isAborted,
@@ -2149,7 +2191,8 @@ export const register: Register = (on, options) => {
         await update($, runA, () => null)
         await update($, peekA, () => false)
         if (isAlerting && !e.isAborted && e.durationMs >= LONG_RUN_MS) {
-          alertLater($, `Claude finished. ${doneText(done).replace(/^\S+ /, '')}.`)
+          // The alert keeps Claude Code's own figure, which also decides whether the request ran long enough.
+          alertLater($, `Claude finished. ${doneText({ ...done, tookMs: e.durationMs }).replace(/^\S+ /, '')}.`)
         }
       } catch {}
     } else {
@@ -2325,6 +2368,7 @@ export const register: Register = (on, options) => {
     const project = await read($, projectA)
     const projectColor = PROJECT_COLORS.find(c => c.key === project?.color)
     const remote = await read($, remoteA)
+    const time = (await read($, timeA)) ?? NO_TIME
     const { Box, Button, Text } = $.ui.resolve(e)
     // The Claude app draws each Button as its own button and drops a fill on the Text inside it, so there a filled
     // Button sits on a Box that carries the fill. The terminal draws the fill on the Text as written.
@@ -2375,8 +2419,24 @@ export const register: Register = (on, options) => {
     const midName = (l: Launch) => l.mid ?? l.label
     const isShortLaunch = !fitsLaunch(midName)
     const launchName: (l: Launch) => string = fitsLaunch(l => l.label) ? l => l.label : isShortLaunch ? l => l.short : midName
+    // The Time row (Batch 56): the session's time so far, counting the request and the helpers still working. A part
+    // with nothing to show yet is left out, and so is the row until something has counted.
+    const liveClaudeMs =
+      e.props.isWorking && run != null ? Math.max(0, Math.max(now, run.startedAt) - run.startedAt - (run.waitMs ?? 0)) : 0
+    const liveHelperMs = agents
+      .filter(isWorking)
+      .reduce((n, a) => n + Math.max(0, now - (helperSince.get(a.id) ?? a.startedAt)), 0)
+    // Whole seconds, cut down as the Done line's clock cuts them, so the two read the same.
+    const timeParts = [
+      { label: 'Claude', ms: time.claudeMs + liveClaudeMs },
+      { label: 'helpers', ms: time.helperMs + liveHelperMs },
+      { label: 'waited on you', ms: time.waitMs },
+    ]
+      .map(p => ({ ...p, ms: p.ms - (p.ms % 1000) }))
+      .filter(p => p.ms >= 1000)
+    const timeWidths = [...timeParts.map(p => `${p.label} ${duration(p.ms)}`.length), 'this session'.length]
     // The rows the open box takes: its border and title, then each row of groups as it wraps at this width, the Color
-    // row where the colors leave the title, and the "Switches to…" row while a switch waits.
+    // row where the colors leave the title, the Time row, and the "Switches to…" row while a switch waits.
     const chipsCells = (labels: string[]) => LABEL_WIDTH + labels.reduce((n, t) => n + t.length + 3, -1)
     const controlsRows =
       3 +
@@ -2407,6 +2467,7 @@ export const register: Register = (on, options) => {
         GROUP_GAP,
         inner,
       ) +
+      (timeParts.length > 0 ? packRows(timeWidths, 3, inner - LABEL_WIDTH) : 0) +
       (pending ? 1 : 0)
 
     // The work view: while Claude works, Steps, Time, Now, then shells and helpers stack above the strip, each section
@@ -2774,8 +2835,31 @@ export const register: Register = (on, options) => {
       ...(weekLimit === undefined ? [] : [gaugeWidth('Week', limitText(weekLimit, now, true).left)]),
     ]
     const lineRoom = e.props.bodyColumns - sessionLabel - modelWidth - 3
+    // The strip clock (Batch 56): this request's time from Enter, ticking while Claude works, on the top line where it
+    // fits without a new row, else beside the bars. In the app, whose band can be narrower than bodyColumns says, it
+    // always sits beside the bars. Between turns, the last request's time stays where the top line has room; the Done
+    // line holds it where it doesn't.
+    const clock =
+      isLive && run
+        ? { label: 'this request', time: ticking(at - run.startedAt) }
+        : !e.props.isWorking && done?.endedAt !== undefined
+          ? { label: 'last request', time: ticking(done.tookMs) }
+          : null
+    const clockWidth = clock === null ? 0 : `${clock.label} ${clock.time}`.length
+    const topWidths = isGaugeRow ? [sessionWidth] : [sessionWidth, contextWidth]
+    const isClockOnTop =
+      clock !== null && !isApp && packRows([...topWidths, clockWidth], 3, lineRoom) === packRows(topWidths, 3, lineRoom)
+    const isClockBeside = clock !== null && isGaugeRow && !isClockOnTop
+    const clockPart =
+      clock === null ? null : (
+        <Text wrap="truncate-end">
+          <Text dimColor>{clock.label} </Text>
+          {clock.time}
+        </Text>
+      )
     const stripRows = isGaugeRow
-      ? packRows([sessionWidth], 3, lineRoom) + packRows(gaugeWidths, GAUGE_GAP, e.props.bodyColumns - STRIP_LABEL)
+      ? packRows([sessionWidth], 3, lineRoom) +
+        packRows(isClockBeside ? [...gaugeWidths, clockWidth] : gaugeWidths, GAUGE_GAP, e.props.bodyColumns - STRIP_LABEL)
       : packRows([sessionWidth, contextWidth], 3, lineRoom) +
         packRows(limitWidths.length > 0 ? limitWidths : ['5h and Week show after first reply'.length], 3, e.props.bodyColumns - STRIP_LABEL)
     const gauge = (label: string, percent: number, text: string, isWarn: boolean, note = '') => (
@@ -2800,6 +2884,7 @@ export const register: Register = (on, options) => {
       ),
       fiveHourLimit !== undefined ? limitGauge('5h', fiveHourLimit) : null,
       weekLimit !== undefined ? limitGauge('Week', weekLimit) : null,
+      isClockBeside ? clockPart : null,
     ]
     const strip = (
       <Box flexDirection="column">
@@ -2827,6 +2912,7 @@ export const register: Register = (on, options) => {
                 <Text dimColor> at API prices</Text>
               </Text>
               {isGaugeRow ? null : contextPart}
+              {isClockOnTop ? clockPart : null}
             </Box>
           </Box>
           <Box flexShrink={0} gap={1}>
@@ -3198,6 +3284,22 @@ export const register: Register = (on, options) => {
             </Box>,
             version !== null && !isVersionOnTitle ? <Text dimColor>v{version}</Text> : null,
           ])}
+          {timeParts.length > 0 ? (
+            <Box>
+              <Box width={LABEL_WIDTH} flexShrink={0}>
+                <Text dimColor>TIME</Text>
+              </Box>
+              <Box flexWrap="wrap" columnGap={3} flexShrink={1}>
+                {timeParts.map(p => (
+                  <Text>
+                    <Text dimColor>{p.label} </Text>
+                    {duration(p.ms)}
+                  </Text>
+                ))}
+                <Text dimColor>this session</Text>
+              </Box>
+            </Box>
+          ) : null}
           {waiting}
         </Box>
       </Box>,
@@ -3435,6 +3537,11 @@ export const register: Register = (on, options) => {
         {r.check !== null ? <Text dimColor>{checkText(r.check)}</Text> : null}
         {r.waitMs > 0 ? (
           <Text dimColor>Time Claude waited on your answers is left out: {duration(r.waitMs)}.</Text>
+        ) : null}
+        {r.helperMs > 0 ? (
+          <Text dimColor>
+            Helpers worked {duration(r.helperMs)} beside Claude. They run side by side, so their time can add up past the clock.
+          </Text>
         ) : null}
         {r.hasBackfill && r.liveSince !== null ? (
           <Text dimColor>

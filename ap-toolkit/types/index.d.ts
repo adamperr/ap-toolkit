@@ -48,7 +48,8 @@ export type ToolkitCostSeen = { usd: number; since: number }
 // One Eastern day of Today's report, kept in $.store as `day:YYYY-MM-DD:<session>` live and `day:YYYY-MM-DD:past`
 // backfilled. Tokens in are new ones; `tokensCached` is what Claude re-read from cache. Tokens and cost include
 // helper agents (backfilled from version 4 on). `ms` leaves out the time Claude waited on the person's answers, kept
-// in `waitMs`. A backfilled day's cost is estimated from tokens and model prices when `isCostEstimated`; days
+// in `waitMs`. `helperMs` adds up helper agents' working time (from Batch 56), which runs beside Claude's, so it can
+// pass the clock. A backfilled day's cost is estimated from tokens and model prices when `isCostEstimated`; days
 // backfilled before version 3 have no cost. Each type of work keeps its share of the cost once `hasTypeCost`; a
 // record kept before that is split once, by the session files' estimate or, where they don't cover it, by time
 // (`isTypeCostByTime`).
@@ -64,6 +65,7 @@ export type ReportDay = {
   ownCalls: number
   ownTokens: number
   waitMs?: number
+  helperMs?: number
   isBackfilled?: boolean
   isCostEstimated?: boolean
   hasTypeCost?: boolean
@@ -124,6 +126,7 @@ export type ToolkitReport = {
   fiveHour: number | null
   week: number | null
   waitMs: number
+  helperMs: number
   hasBackfill: boolean
   hasCost: boolean
   liveSince: number | null
@@ -147,6 +150,10 @@ export type ToolkitDone = {
   tokensOut?: number
   costUsd?: number | null
 }
+
+// The session's time for the controls box's Time row (Batch 56): Claude's requests from Enter to done, less the time
+// they waited on the person's answers (`waitMs`), and helper agents' working time added up. /clear starts it over.
+export type ToolkitTime = { claudeMs: number; helperMs: number; waitMs: number }
 
 // Which model helper agents run on: picked per task, Haiku, or Claude's own.
 export type ToolkitHelperMode = 'lowest' | 'fast' | 'same'
@@ -212,6 +219,7 @@ declare module 'claude-code' {
       project: ToolkitProject | null
       menu: ToolkitMenuEntry[] | null
       remote: boolean | null
+      time: ToolkitTime
     }
   }
 }
