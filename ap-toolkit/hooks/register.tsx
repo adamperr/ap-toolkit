@@ -122,21 +122,21 @@ export const WORK_TYPES = [
   { key: 'talk', label: 'Planning & talk' },
 ]
 
-// The Launch list, two to a row in this order, each with its icon and the icon's color.
+// The Launch row, in this order, each with its icon and the icon's color. Open project folder reads "Open folder"
+// where the row has no room for the full names.
 export const LAUNCHES = [
   { key: 'start', label: 'Start session', short: 'Start', icon: '▶', color: 'claude' },
   { key: 'tab', label: 'New tab', short: 'New tab', icon: '+', color: 'success' },
   { key: 'report', label: "Today's report", short: 'Report', icon: '▤', color: 'warning' },
-  { key: 'folder', label: 'Open project folder', short: 'Folder', icon: '▣', color: 'ide' },
+  { key: 'folder', label: 'Open project folder', mid: 'Open folder', short: 'Folder', icon: '▣', color: 'ide' },
   { key: 'menu', label: 'Terminal menu', short: 'Menu', icon: '▦', color: 'planMode' },
 ]
+type Launch = (typeof LAUNCHES)[number]
 // The slot after the Launch list holds these two side by side, for a long conversation.
 export const FRESH = [
   { key: 'clear', label: 'Clear', icon: '○', color: 'suggestion' },
   { key: 'compact', label: 'Compact', icon: '≡', color: 'suggestion' },
 ]
-// Below this column width the Launch list uses short names.
-const NARROW_LAUNCH = 22
 
 export const START_PROMPT =
   'Start the session: read the project map ("Resume here" and "Waiting on you") and tell me where things stand ' +
@@ -148,7 +148,8 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | Row or button | What it does |
 | --- | --- |
 | **◆ Project name** | The strip's first line, above the prompt. It starts with this project's folder name, bold and in the project's color, or **Session** outside a project folder. Tokens are what Claude read new and wrote this session, helpers included; cache re-reads are left out, and Today's report still shows them. **At API prices** is Claude Code's own \`/cost\` figure: what the session would cost on the API, which your plan doesn't bill. **Context** is how full the conversation is. ◆ beats while Claude works. |
-| **Limits** | The strip's second line: how much of the 5-hour and weekly windows is left, and when each resets. When your pace would use up the 5-hour window before it resets, it says when, in amber. |
+| **Limits** | The strip's second line: how much of the 5-hour and weekly windows is left, and when each resets. When your pace would use up the 5-hour window before it resets, it says when, in amber. Where the line is short of room, the notes get shorter so both windows stay on one line. |
+| **While Claude works** | The strip folds to one line, so the work view gets a row back: the context bar (how full it is), then the 5-hour and week bars (how much is left). The cost, the token counts, and the reset times come back when Claude finishes. A pace warning turns the 5-hour figure amber until then. |
 | **Bars** | A bar fills as you use it, and its color says how full it is: green under 50%, amber from 50% to 79%, and red from 80%. That's the only color code. |
 | **Steps** | Shows above the strip while Claude works. The bar has one segment per step on Claude's to-do list: green when done, orange with a moving shine for the step it's on, and gray for what's left. With no to-do list, it reads **Working**. The step's clock turns amber after 3 minutes. On the right are this turn's tokens so far, as **in** (read new) and **out** (written), then its cost, helpers included. The checklist sits under it. |
 | **Time** | When you sent the message, how long Claude has worked, and when it should finish: the average finished step times the steps left. The estimate shows once a step finishes; without a to-do list, there's none. |
@@ -165,7 +166,7 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **Helper agents** | Which model helper agents run on. Each press of its pill moves to the next: **Lowest that fits** lets Claude pick per task, **Fast & Cheap** uses Haiku, and **Same as me** uses Claude's own model. |
 | **Clean View** | Hides tool output (reads, edits, and commands), so Claude's words stand out. Questions and plans for your OK stay. The work view above the strip shows either way. |
 | **Remote Control** | Claude Code's own **Enable Remote Control for all sessions** setting. On, every tab you open from then on connects by itself, so you can pick up any session in the Claude app on your phone or at claude.ai/code, and this tab connects right away. A tab that was already open connects when it restarts. Off stops new tabs from connecting; a connected tab stays connected until you close it. While a session is connected, its conversation is stored on Anthropic's servers. Your PC must stay awake with the tab open. The row hides where Remote Control isn't available or your organization locks it. |
-| **On / Off pills** | Press the pill at the right of a setting to switch it. The dot beside the setting turns green while it's on. |
+| **On / Off pills** | Press the pill next to a setting to switch it. The dot beside the setting turns green while it's on. |
 | **Start session** | Asks Claude to read the project map and tell you where things stand. |
 | **New tab** | Opens a Windows Terminal tab in this folder, named for the project and in its color, and starts a fresh Claude session there, with an empty box. Claude Code leaves that tab's name alone. Tabs you open yourself stay plain and read **Claude Code**. |
 | **Open project folder** | Opens this session's folder in File Explorer. |
@@ -177,7 +178,7 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **"Needs you" alerts** | A Windows notification when Claude asks a question, wants a plan OK or a permission, or finishes a request that took 2 minutes or more. The title names the project, such as **ClaudeMods needs you**, or reads **Claude needs you** outside a project folder. Turn them off in \`/config\`. |
 | **⚠ Folder check** | Warns when a session starts outside a project folder (one with its own CLAUDE.md). **Got it** hides it for this session. |
 | **⚠ Wrap-up nudge** | Shows when context reaches 75% or the 5-hour limit reaches 85%, with **Compact** and **Clear**. **Not now** hides it until the reading drops and climbs back. It also shows when you come back after an hour away from a conversation over 50K tokens, since your next message rereads all of it at full price; **Not now** hides that one until your next hour away. |
-| **Version** | The dim number in the controls box's bottom-right corner, such as v0.1.20: the second number is the major release, and the third is the batch in the project plan. A tab that shows an older number hasn't loaded the latest changes; restart it. |
+| **Version** | The dim number at the top right of the controls box, next to **?** and **▾** (at the end of the Launch row in a narrow window), such as v0.1.20: the second number is the major release, and the third is the batch in the project plan. A tab that shows an older number hasn't loaded the latest changes; restart it. |
 
 To change the report's hourly rate, open \`/config\`. Press **Esc** to close this help.`
 
@@ -226,10 +227,6 @@ const SHELLS_SHOWN = 3
 const FAILED_KEPT = 3
 const COMMAND_KEPT = 200
 const WORK_COLUMN = 32
-// The rows the controls box takes when open: its border, title, divider, Model, Effort, two settings under their rule,
-// three Launch rows under theirs, and the version row. Once the folder check has run, the Color row adds one, and the
-// Remote Control setting adds one where it shows.
-const CONTROLS_ROWS = 14
 // How a finished helper's line is marked: done, stopped, or failed.
 const endMark = (a: ToolkitAgent) =>
   a.status === 'done' ? { mark: '✓', color: 'success' } : a.status === 'stopped' ? { mark: '■', color: 'warning' } : { mark: '✗', color: 'error' }
@@ -278,21 +275,23 @@ const NAME_MAX = 20
 // Below this width the rows use short names so they fit on one line.
 const NARROW = 64
 
-// The panel's box: its widest, the cells its border and padding take, and the label and setting-name columns.
-const PANEL_WIDTH = 74
+// The panel's box: the cells its border and padding take, the Model, Effort, and Color label column, and the fewest
+// cells between the groups on a row.
 const PANEL_FRAME = 4
-const LABEL_WIDTH = 10
-const NAME_WIDTH = 17
+const LABEL_WIDTH = 7
+const GROUP_GAP = 2
 
-// The box's title row: the title, the fewest cells of the project's name worth showing after it, and the cells the
-// rest of the row takes (a space, "· ", a space, and the ? and ▾ buttons).
+// The box's title row: the title, and the cells the ? and ▾ buttons take with the gap between them.
 const TITLE = '◆ A P   T O O L K I T'
-const TITLE_NAME_MIN = 4
-const TITLE_ROW_REST = 8
+const TITLE_BUTTONS = 4
 
 // The strip above the prompt: its label column, the cells in each bar, and the eighths a bar's last cell fills by.
 const STRIP_LABEL = 11
 const METER = 8
+// While Claude works, the strip folds to one line (Batch 51), with bars this many cells wide and this many cells
+// between them, so the three fit beside the name and the model at 110 columns.
+const WORKING_METER = 6
+const GAUGE_GAP = 2
 const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
 // The 5-hour window's pace shows once this much of it has gone by, so the first minutes don't cry wolf.
 const FIVE_HOURS = 5 * 3_600_000
@@ -357,8 +356,13 @@ const hoursMinutes = (ms: number) => {
 }
 
 // A rate-limit window on the Limits line: how much is used (the bar), how much is left, and when it resets. When the
-// 5-hour window's pace so far would use it up before then, the note says when instead.
-export function limitText(l: ToolkitLimit, now: number): { used: number; left: string; note: string; isPace: boolean } {
+// 5-hour window's pace so far would use it up before then, the note says when instead. The short notes drop "about",
+// "at this pace", and the 5-hour countdown, so both windows stay on one row.
+export function limitText(
+  l: ToolkitLimit,
+  now: number,
+  isShort = false,
+): { used: number; left: string; note: string; isPace: boolean } {
   const reset = l.resetsAt === undefined ? NaN : Date.parse(l.resetsAt)
   if (Number.isFinite(reset) && reset <= now) {
     return { used: 0, left: '100% left', note: `reset at ${easternClock(reset, now)}`, isPace: false }
@@ -370,10 +374,12 @@ export function limitText(l: ToolkitLimit, now: number): { used: number; left: s
     const start = reset - FIVE_HOURS
     const out = start + ((now - start) * 100) / used
     if (now - start >= PACE_AFTER_MS && out < reset) {
-      return { used, left, note: `runs out about ${easternClock(out, now)} at this pace`, isPace: true }
+      const clock = easternClock(out, now)
+      return { used, left, note: isShort ? `runs out ${clock}` : `runs out about ${clock} at this pace`, isPace: true }
     }
   }
-  const note = `resets ${easternClock(reset, now)}${l.kind === 'five_hour' ? ` (${hoursMinutes(reset - now)})` : ''}`
+  const countdown = l.kind === 'five_hour' && !isShort ? ` (${hoursMinutes(reset - now)})` : ''
+  const note = `resets ${easternClock(reset, now)}${countdown}`
   return { used, left, note, isPace: false }
 }
 
@@ -2315,6 +2321,74 @@ export const register: Register = (on, options) => {
     const isNarrow = e.props.bodyColumns < NARROW
     const takesEffort = takesEffortOf(hasEffort, noEffort, model)
 
+    // The controls box (Batch 50): a rounded box as wide as the band, 6 rows where the 74-cell box took 16. Each row's
+    // groups wrap onto another row where the band is narrower than bodyColumns says (the Claude app), so nothing spills.
+    const width = e.props.bodyColumns
+    const inner = Math.max(0, width - PANEL_FRAME)
+    // The swatches with a cell after each, each this many cells wide, then the longest color name.
+    const swatchRow = (cells: number) =>
+      PROJECT_COLORS.length * (cells + 1) + Math.max(...PROJECT_COLORS.map(c => c.label.length))
+    // The title row's right end: the version where it fits, then the ? and ▾ buttons.
+    const versionCells = version !== null ? `v${version}`.length + 2 : 0
+    const isVersionOnTitle = version !== null && inner >= TITLE.length + 1 + versionCells + TITLE_BUTTONS
+    const titleRest = (isVersionOnTitle ? versionCells : 0) + TITLE_BUTTONS
+    // The colors sit on the title row where they fit whole with their name. Otherwise they get a row of their own,
+    // where they slim to two cells where three don't fit, and drop the name where that still doesn't.
+    const isColorOnTitle = inner >= TITLE.length + 2 + LABEL_WIDTH + swatchRow(3) + 1 + titleRest
+    const isSlim = inner < LABEL_WIDTH + swatchRow(3)
+    const hasColorName = inner >= LABEL_WIDTH + swatchRow(isSlim ? 2 : 3)
+    const nextHelper =
+      HELPER_MODES[(HELPER_MODES.findIndex(m => m.key === helperMode) + 1) % HELPER_MODES.length]?.key ?? 'lowest'
+    const helperLabel = HELPER_MODES.find(m => m.key === helperMode)?.[isNarrow ? 'short' : 'label'] ?? ''
+    // The settings' long names where all three fit on one row with their pills, else the short ones.
+    const settingCells = (name: string, pill: string) => 2 + name.length + 1 + pill.length + 2
+    const isShortSettings =
+      settingCells('Clean View', '○ Off') +
+        settingCells('Helper agents', helperLabel) +
+        (remote == null ? 0 : settingCells('Remote Control', '○ Off') + GROUP_GAP) +
+        GROUP_GAP >
+      inner
+    // Launch: the full names where the row fits them, then "Open folder", then the short names. Past that it wraps.
+    const freshCells = FRESH.reduce((n, f) => n + 2 + f.label.length, 0) + 2 * (FRESH.length - 1)
+    const fitsLaunch = (name: (l: Launch) => string) =>
+      LAUNCHES.reduce((n, l) => n + 2 + name(l).length + GROUP_GAP, 0) + freshCells <= inner
+    const midName = (l: Launch) => l.mid ?? l.label
+    const isShortLaunch = !fitsLaunch(midName)
+    const launchName: (l: Launch) => string = fitsLaunch(l => l.label) ? l => l.label : isShortLaunch ? l => l.short : midName
+    // The rows the open box takes: its border and title, then each row of groups as it wraps at this width, the Color
+    // row where the colors leave the title, and the "Switches to…" row while a switch waits.
+    const chipsCells = (labels: string[]) => LABEL_WIDTH + labels.reduce((n, t) => n + t.length + 3, -1)
+    const controlsRows =
+      3 +
+      packRows(
+        [
+          chipsCells(MODELS.map(m => (isNarrow ? m.short : m.label))),
+          chipsCells(EFFORTS.map(x => (isNarrow ? x.short : (x.chip ?? x.label)))),
+        ],
+        GROUP_GAP,
+        inner,
+      ) +
+      (project != null && projectColor && !isColorOnTitle ? 1 : 0) +
+      packRows(
+        [
+          settingCells('Clean View', '○ Off'),
+          settingCells(isShortSettings ? 'Helpers' : 'Helper agents', helperLabel),
+          ...(remote == null ? [] : [settingCells(isShortSettings ? 'Remote' : 'Remote Control', '○ Off')]),
+        ],
+        GROUP_GAP,
+        inner,
+      ) +
+      packRows(
+        [
+          ...LAUNCHES.map(l => 2 + launchName(l).length),
+          freshCells,
+          ...(version !== null && !isVersionOnTitle ? [`v${version}`.length] : []),
+        ],
+        GROUP_GAP,
+        inner,
+      ) +
+      (pending ? 1 : 0)
+
     // The work view: while Claude works, Steps, Time, Now, then shells and helpers stack above the strip, each section
     // ending in a gray row; after the turn, one Done line folds them in until the next message. While the clock moves,
     // spinners turn, the shine sweeps the current step, numbers count up, and a new or changed part lights up briefly.
@@ -2566,8 +2640,8 @@ export const register: Register = (on, options) => {
       )
     // The strip: two labeled lines above the prompt, Session and Limits. A part that doesn't fit the window moves to a
     // new line inside its own row, under the first part, so nothing falls off.
-    const blocks = (percent: number) => {
-      const m = meter(percent)
+    const blocks = (percent: number, cells = METER) => {
+      const m = meter(percent, cells)
       return (
         <Text>
           <Text color={tone(percent)}>{m.full}</Text>
@@ -2601,7 +2675,7 @@ export const register: Register = (on, options) => {
         </Text>
       )
     const limitPart = (label: string, l: ToolkitLimit) => {
-      const t = limitText(l, now)
+      const t = limitText(l, now, isShortLimits)
       return (
         <Text wrap="truncate-end">
           <Text dimColor>{label} </Text>
@@ -2627,20 +2701,69 @@ export const register: Register = (on, options) => {
             .length
     const modelWidth =
       `${modelLabel(model)}${takesEffort && effortLabel(effort) ? ` · ${effortLabel(effort)}` : ''}`.length + 2
-    const limitWidth = (name: string, l: ToolkitLimit) => {
-      const t = limitText(l, now)
+    const limitWidth = (name: string, l: ToolkitLimit, isShort: boolean) => {
+      const t = limitText(l, now, isShort)
       return `${name} ${' '.repeat(METER)} ${t.left}${t.note ? ` · ${t.note}` : ''}`.length
     }
-    const limitWidths = [
-      ...(fiveHourLimit === undefined ? [] : [limitWidth('5h', fiveHourLimit)]),
-      ...(weekLimit === undefined ? [] : [limitWidth('Week', weekLimit)]),
+    const limitWidthsOf = (isShort: boolean) => [
+      ...(fiveHourLimit === undefined ? [] : [limitWidth('5h', fiveHourLimit, isShort)]),
+      ...(weekLimit === undefined ? [] : [limitWidth('Week', weekLimit, isShort)]),
     ]
+    // The 5-hour and week windows share one row: where the full notes don't fit, the short ones do. Past that, in a
+    // narrow window, the week moves to a row of its own.
+    const isShortLimits =
+      limitWidthsOf(false).reduce((n, w) => n + w + 3, -3) > e.props.bodyColumns - STRIP_LABEL
+    const limitWidths = limitWidthsOf(isShortLimits)
     // Once the folder check has run, the project's name, bold and in its color, takes the place of "Session"; the
     // line's figures move right to make room.
     const sessionLabel = project != null && projectColor ? Math.max(STRIP_LABEL, project.name.length + 4) : STRIP_LABEL
-    const stripRows =
-      packRows([sessionWidth, contextWidth], 3, e.props.bodyColumns - sessionLabel - modelWidth - 3) +
-      packRows(limitWidths.length > 0 ? limitWidths : ['5h and Week show after first reply'.length], 3, e.props.bodyColumns - STRIP_LABEL)
+    // While Claude works (Batch 51), the strip folds to one line: the name, the three bars, and the model. Context reads
+    // how full it is, beside limits that read how much is left. The cost, the token counts, and the reset times come
+    // back when Claude finishes; a pace warning turns the 5-hour "left" amber until then.
+    const isOneLine = e.props.isWorking
+    // Before the first reply, one short note stands in for the bars that haven't come yet.
+    const hasLimits = fiveHourLimit !== undefined || weekLimit !== undefined
+    const waitNote =
+      contextShown === null || usage === null
+        ? hasLimits
+          ? null
+          : 'Context, 5h, and Week show after first reply'
+        : hasLimits
+          ? null
+          : '5h and Week show after first reply'
+    const gaugeWidth = (name: string, text: string) => `${name} ${' '.repeat(WORKING_METER)} ${text}`.length
+    const gaugeWidths = [
+      ...(contextShown === null || usage === null ? [] : [gaugeWidth('Context', `${Math.round(contextShown)}% full`)]),
+      ...(waitNote === null ? [] : [waitNote.length]),
+      ...(fiveHourLimit === undefined ? [] : [gaugeWidth('5h', limitText(fiveHourLimit, now, true).left)]),
+      ...(weekLimit === undefined ? [] : [gaugeWidth('Week', limitText(weekLimit, now, true).left)]),
+    ]
+    const lineRoom = e.props.bodyColumns - sessionLabel - modelWidth - 3
+    const stripRows = isOneLine
+      ? packRows(gaugeWidths, GAUGE_GAP, lineRoom)
+      : packRows([sessionWidth, contextWidth], 3, lineRoom) +
+        packRows(limitWidths.length > 0 ? limitWidths : ['5h and Week show after first reply'.length], 3, e.props.bodyColumns - STRIP_LABEL)
+    const gauge = (label: string, percent: number, text: string, isWarn: boolean) => (
+      <Text wrap="truncate-end">
+        <Text dimColor>{label} </Text>
+        {blocks(percent, WORKING_METER)}
+        <Text color={isWarn ? 'warning' : undefined}> {text}</Text>
+      </Text>
+    )
+    const limitGauge = (label: string, l: ToolkitLimit) => {
+      const t = limitText(l, now, true)
+      return gauge(label, tweened(`limit:${l.kind}`, t.used, now, isMoving), t.left, t.isPace)
+    }
+    const gauges = [
+      contextShown === null || usage === null ? null : gauge('Context', contextShown, `${Math.round(contextShown)}% full`, false),
+      waitNote === null ? null : (
+        <Text dimColor wrap="truncate-end">
+          {waitNote}
+        </Text>
+      ),
+      fiveHourLimit !== undefined ? limitGauge('5h', fiveHourLimit) : null,
+      weekLimit !== undefined ? limitGauge('Week', weekLimit) : null,
+    ]
     const strip = (
       <Box flexDirection="column">
         <Box justifyContent="space-between" columnGap={3}>
@@ -2659,14 +2782,18 @@ export const register: Register = (on, options) => {
                 )}
               </Text>
             </Box>
-            <Box flexWrap="wrap" columnGap={3} flexShrink={1}>
-              <Text wrap="truncate-end">
-                {amount(Math.round(tweened('tokens', sessionTokens, now, isMoving)))}
-                <Text dimColor> tokens · </Text>
-                {money(tweened('cost', usage?.costUsd ?? 0, now, isMoving))}
-                <Text dimColor> at API prices</Text>
-              </Text>
-              {contextPart}
+            <Box flexWrap="wrap" columnGap={isOneLine ? GAUGE_GAP : 3} flexShrink={1}>
+              {isOneLine
+                ? gauges
+                : [
+                    <Text wrap="truncate-end">
+                      {amount(Math.round(tweened('tokens', sessionTokens, now, isMoving)))}
+                      <Text dimColor> tokens · </Text>
+                      {money(tweened('cost', usage?.costUsd ?? 0, now, isMoving))}
+                      <Text dimColor> at API prices</Text>
+                    </Text>,
+                    contextPart,
+                  ]}
             </Box>
           </Box>
           <Box flexShrink={0} gap={1}>
@@ -2686,20 +2813,22 @@ export const register: Register = (on, options) => {
             )}
           </Box>
         </Box>
-        <Box>
-          <Box width={STRIP_LABEL} flexShrink={0}>
-            <Text dimColor>{'  '}Limits</Text>
+        {isOneLine ? null : (
+          <Box>
+            <Box width={STRIP_LABEL} flexShrink={0}>
+              <Text dimColor>{'  '}Limits</Text>
+            </Box>
+            <Box flexWrap="wrap" columnGap={3} flexShrink={1}>
+              {fiveHourLimit === undefined && weekLimit === undefined ? (
+                <Text dimColor wrap="truncate-end">
+                  5h and Week show after first reply
+                </Text>
+              ) : null}
+              {fiveHourLimit !== undefined ? limitPart('5h', fiveHourLimit) : null}
+              {weekLimit !== undefined ? limitPart('Week', weekLimit) : null}
+            </Box>
           </Box>
-          <Box flexWrap="wrap" columnGap={3} flexShrink={1}>
-            {fiveHourLimit === undefined && weekLimit === undefined ? (
-              <Text dimColor wrap="truncate-end">
-                5h and Week show after first reply
-              </Text>
-            ) : null}
-            {fiveHourLimit !== undefined ? limitPart('5h', fiveHourLimit) : null}
-            {weekLimit !== undefined ? limitPart('Week', weekLimit) : null}
-          </Box>
-        </Box>
+        )}
       </Box>
     )
 
@@ -2750,7 +2879,7 @@ export const register: Register = (on, options) => {
       const shellKeys = (status: readonly ToolkitShell['status'][]) =>
         shells.filter(s => status.includes(s.status)).map(s => `shell:${s.id}`)
       const kept = fitParts(
-        e.props.maxRows - (folderWarning == null ? 0 : 1) - (nudge == null ? 0 : 1) - (isControlsShown ? CONTROLS_ROWS + (project == null ? 0 : 1) + (remote == null ? 0 : 1) : 0) - stripRows,
+        e.props.maxRows - (folderWarning == null ? 0 : 1) - (nudge == null ? 0 : 1) - (isControlsShown ? controlsRows : 0) - stripRows,
         parts,
         [
           'gray',
@@ -2883,40 +3012,30 @@ export const register: Register = (on, options) => {
       )
     }
 
-    // The full panel follows docs\design\target-panel.png: a rounded box, picks on colored blocks, pills on the right.
-    const width = Math.min(PANEL_WIDTH, e.props.bodyColumns)
-    const inner = Math.max(0, width - PANEL_FRAME)
-    const half = Math.floor(inner / 2)
-    // The Color row's width with swatches this many cells wide: the label, the swatches with a cell between, and the
-    // longest color name. Swatches slim to two cells where three don't fit, and the name goes where that still doesn't.
-    const colorRow = (cells: number) =>
-      LABEL_WIDTH + PROJECT_COLORS.length * (cells + 1) + Math.max(...PROJECT_COLORS.map(c => c.label.length))
-    const isSlim = inner < colorRow(3)
-    // The project's name follows the title, bold and in its color, where the row has room for the title, "· ", at
-    // least TITLE_NAME_MIN cells of the name, and the ? and ▾ buttons. A longer name is cut with "…".
-    const titleName =
-      project != null && projectColor && inner >= TITLE.length + TITLE_NAME_MIN + TITLE_ROW_REST
-        ? { name: project.name, hex: projectColor.hex }
+    // The full panel follows docs\design\batch-50-bar-layout-picks.html (A). Its widths and the rows it takes are
+    // worked out above the work view, which leaves room for it.
+    // The Color label, then the swatches, each `cells` wide with the one in use marked ✓, then the color's name where
+    // there's room.
+    const colors =
+      project != null && projectColor
+        ? (cells: number, hasName: boolean) => (
+            <Box flexShrink={1}>
+              <Box width={LABEL_WIDTH} flexShrink={0}>
+                <Text dimColor>COLOR</Text>
+              </Box>
+              <Box gap={1} flexWrap="wrap" flexShrink={1}>
+                {PROJECT_COLORS.map(c => (
+                  <Button key={`color-${c.key}`} plain onPress={() => (c.key === project.color ? undefined : setProjectColor($, c.key))}>
+                    <Text backgroundColor={c.hex} color="inverseText">
+                      {c.key === project.color ? (cells === 2 ? '✓ ' : ' ✓ ') : cells === 2 ? '  ' : '   '}
+                    </Text>
+                  </Button>
+                ))}
+                {hasName ? <Text dimColor>{projectColor.label}</Text> : null}
+              </Box>
+            </Box>
+          )
         : null
-    const nextHelper =
-      HELPER_MODES[(HELPER_MODES.findIndex(m => m.key === helperMode) + 1) % HELPER_MODES.length]?.key ?? 'lowest'
-    const helperLabel = HELPER_MODES.find(m => m.key === helperMode)?.[isNarrow ? 'short' : 'label'] ?? ''
-
-    // A divider is clipped to one row, as the gray rows are, so it stops at the box's edge where the box is narrower
-    // than bodyColumns says (the Claude app): it can't spill onto a second row or end in "…".
-    const divider = () => (
-      <Box height={1} overflow="hidden" flexShrink={0}>
-        <Text dimColor>{'─'.repeat(inner)}</Text>
-      </Box>
-    )
-    const rule = (title: string) => (
-      <Box height={1} overflow="hidden" flexShrink={0}>
-        <Box flexShrink={0}>
-          <Text dimColor>{`── ${title.split('').join(' ')} `}</Text>
-        </Box>
-        {divider()}
-      </Box>
-    )
     // A model or effort: the one in use sits on a colored block.
     const chip = (key: string, label: string, isPicked: boolean, color: string, onPress: () => void, isDim = false) => (
       <Button key={key} plain dimColor={isDim} onPress={onPress}>
@@ -2925,16 +3044,14 @@ export const register: Register = (on, options) => {
         </Text>
       </Button>
     )
-    // A setting's pill is named for what a press does: Clean View's reads clean-off while it's on.
-    const setting = (name: string, about: string, isOn: boolean, key: string, pill: string, onPress: () => void) => (
-      <Box justifyContent="space-between" gap={1}>
-        <Box flexShrink={1}>
-          <Text wrap="truncate-end">
-            <Text color={isOn ? 'success' : 'inactive'}>{isOn ? '●' : '○'} </Text>
-            <Text>{name.padEnd(NAME_WIDTH)}</Text>
-            <Text dimColor>{about}</Text>
-          </Text>
-        </Box>
+    // A setting: its dot and name, then its pill. The pill is named for what a press does: Clean View's reads clean-off
+    // while it's on. What each setting does is in Help.
+    const setting = (name: string, short: string, isOn: boolean, key: string, pill: string, onPress: () => void) => (
+      <Box gap={1} flexShrink={0}>
+        <Text>
+          <Text color={isOn ? 'success' : 'inactive'}>{isOn ? '●' : '○'} </Text>
+          <Text>{isShortSettings ? short : name}</Text>
+        </Text>
         <Button key={key} plain onPress={onPress}>
           <Text backgroundColor={isOn ? 'success' : 'subtle'} color={isOn ? 'inverseText' : 'text'}>
             {` ${pill} `}
@@ -2942,125 +3059,92 @@ export const register: Register = (on, options) => {
         </Button>
       </Box>
     )
-    // Two slots to a row; Clear and Compact share the slot after the last button (null).
-    const slots = [...LAUNCHES, null]
-    const launchRows = Array.from({ length: Math.ceil(slots.length / 2) }, (_, r) => slots.slice(r * 2, r * 2 + 2))
-    const clearLabel = !clearArmed ? 'Clear' : half < NARROW_LAUNCH ? 'Sure?' : 'Sure? Clear'
+    const clearLabel = !clearArmed ? 'Clear' : isShortLaunch ? 'Sure?' : 'Sure? Clear'
+    // A row of groups: spread across the row, each group whole, wrapping onto another row where they don't fit.
+    const groups = (children: (RenderElement | null)[]) => (
+      <Box flexWrap="wrap" columnGap={GROUP_GAP} justifyContent="space-between">
+        {children}
+      </Box>
+    )
 
     return band(
-      <Box justifyContent="flex-end">
+      <Box>
         <Box flexDirection="column" width={width} borderStyle="round" borderColor="warning" paddingX={1}>
           <Box justifyContent="space-between" gap={1}>
-            {titleName !== null ? (
-              <Box gap={1} flexShrink={1}>
-                <Box flexShrink={0}>
-                  <Text color="claude" bold>
-                    {TITLE}
-                  </Text>
-                </Box>
-                <Text wrap="truncate-end">
-                  <Text dimColor>· </Text>
-                  <Text color={titleName.hex} bold>
-                    {titleName.name}
-                  </Text>
-                </Text>
-              </Box>
-            ) : (
+            <Box columnGap={2} flexShrink={1} flexWrap="wrap">
               <Text color="claude" bold wrap="truncate-end">
                 {TITLE}
               </Text>
-            )}
+              {colors !== null && isColorOnTitle ? colors(3, true) : null}
+            </Box>
             <Box gap={2} flexShrink={0}>
+              {isVersionOnTitle ? <Text dimColor>v{version}</Text> : null}
               <Button key="help" label="?" plain onPress={() => openHelp($)} />
               <Button key="minimize" label="▾" plain onPress={() => setControlsOpen($, false)} />
             </Box>
           </Box>
-          {divider()}
-          <Box>
-            <Box width={LABEL_WIDTH} flexShrink={0}>
-              <Text dimColor>MODEL</Text>
-            </Box>
-            <Box gap={1}>
-              {MODELS.map(m =>
-                chip(`model-${m.key}`, isNarrow ? m.short : m.label, m.key === shownModel, 'claude', () =>
-                  m.key === shownModel ? undefined : switchModel($, m.key),
-                ),
-              )}
-            </Box>
-          </Box>
-          <Box>
-            <Box width={LABEL_WIDTH} flexShrink={0}>
-              <Text dimColor>EFFORT</Text>
-            </Box>
-            <Box gap={1}>
-              {EFFORTS.map(x =>
-                chip(
-                  `effort-${x.key}`,
-                  isNarrow ? x.short : (x.chip ?? x.label),
-                  takesEffort && x.key === shownEffort,
-                  'permission',
-                  () =>
-                    !takesEffort ? $.ui.toast(whyNoEffort) : x.key === shownEffort ? undefined : switchEffort($, x.key),
-                  !takesEffort,
-                ),
-              )}
-            </Box>
-          </Box>
-          {project != null && projectColor ? (
-            <Box>
+          {groups([
+            <Box flexShrink={0}>
               <Box width={LABEL_WIDTH} flexShrink={0}>
-                <Text dimColor>COLOR</Text>
+                <Text dimColor>MODEL</Text>
               </Box>
-              <Box gap={1} flexWrap="wrap">
-                {PROJECT_COLORS.map(c => (
-                  <Button key={`color-${c.key}`} plain onPress={() => (c.key === project.color ? undefined : setProjectColor($, c.key))}>
-                    <Text backgroundColor={c.hex} color="inverseText">
-                      {c.key === project.color ? (isSlim ? '✓ ' : ' ✓ ') : isSlim ? '  ' : '   '}
-                    </Text>
-                  </Button>
-                ))}
-                {inner >= colorRow(isSlim ? 2 : 3) ? <Text dimColor>{projectColor.label}</Text> : null}
+              <Box gap={1}>
+                {MODELS.map(m =>
+                  chip(`model-${m.key}`, isNarrow ? m.short : m.label, m.key === shownModel, 'claude', () =>
+                    m.key === shownModel ? undefined : switchModel($, m.key),
+                  ),
+                )}
               </Box>
-            </Box>
-          ) : null}
-          {rule('SETTINGS')}
-          {setting('Clean View', 'hides tool output', cleanView, cleanView ? 'clean-off' : 'clean-on', cleanView ? '● On' : '○ Off', () =>
-            setCleanView($, !cleanView),
-          )}
-          {setting('Helper agents', 'model they use', false, `helpers-${nextHelper}`, helperLabel, () =>
-            setHelperMode($, nextHelper),
-          )}
-          {remote == null
-            ? null
-            : setting('Remote Control', 'your phone can open any tab', remote, remote ? 'remote-off' : 'remote-on', remote ? '● On' : '○ Off', () =>
-                setRemote($, !remote),
-              )}
-          {rule('LAUNCH')}
-          {launchRows.map(row => (
-            <Box>
-              {row.map(l =>
-                l !== null ? (
-                  <Box width={half} flexShrink={0}>
-                    <Button key={`launch-${l.key}`} plain onPress={() => launch($, l.key)}>
-                      <Text color={l.color}>{l.icon}</Text> {half < NARROW_LAUNCH ? l.short : l.label}
-                    </Button>
-                  </Box>
-                ) : (
-                  <Box width={half} flexShrink={0} gap={2}>
-                    {FRESH.map(f => (
-                      <Button key={`launch-${f.key}`} plain onPress={() => (f.key === 'clear' ? pressClear($) : launch($, f.key))}>
-                        <Text color={f.color}>{f.icon}</Text> {f.key === 'clear' ? clearLabel : f.label}
-                      </Button>
-                    ))}
-                  </Box>
+            </Box>,
+            <Box flexShrink={0}>
+              <Box width={LABEL_WIDTH} flexShrink={0}>
+                <Text dimColor>EFFORT</Text>
+              </Box>
+              <Box gap={1}>
+                {EFFORTS.map(x =>
+                  chip(
+                    `effort-${x.key}`,
+                    isNarrow ? x.short : (x.chip ?? x.label),
+                    takesEffort && x.key === shownEffort,
+                    'permission',
+                    () =>
+                      !takesEffort ? $.ui.toast(whyNoEffort) : x.key === shownEffort ? undefined : switchEffort($, x.key),
+                    !takesEffort,
+                  ),
+                )}
+              </Box>
+            </Box>,
+          ])}
+          {colors !== null && !isColorOnTitle ? colors(isSlim ? 2 : 3, hasColorName) : null}
+          {groups([
+            setting('Clean View', 'Clean View', cleanView, cleanView ? 'clean-off' : 'clean-on', cleanView ? '● On' : '○ Off', () =>
+              setCleanView($, !cleanView),
+            ),
+            setting('Helper agents', 'Helpers', false, `helpers-${nextHelper}`, helperLabel, () => setHelperMode($, nextHelper)),
+            remote == null
+              ? null
+              : setting('Remote Control', 'Remote', remote, remote ? 'remote-off' : 'remote-on', remote ? '● On' : '○ Off', () =>
+                  setRemote($, !remote),
                 ),
-              )}
-            </Box>
-          ))}
-          <Box justifyContent="space-between" gap={1}>
-            <Box flexShrink={1}>{waiting}</Box>
-            {version !== null ? <Text dimColor>v{version}</Text> : null}
-          </Box>
+          ])}
+          {groups([
+            ...LAUNCHES.map(l => (
+              <Box flexShrink={0}>
+                <Button key={`launch-${l.key}`} plain onPress={() => launch($, l.key)}>
+                  <Text color={l.color}>{l.icon}</Text> {launchName(l)}
+                </Button>
+              </Box>
+            )),
+            <Box flexShrink={0} gap={2}>
+              {FRESH.map(f => (
+                <Button key={`launch-${f.key}`} plain onPress={() => (f.key === 'clear' ? pressClear($) : launch($, f.key))}>
+                  <Text color={f.color}>{f.icon}</Text> {f.key === 'clear' ? clearLabel : f.label}
+                </Button>
+              ))}
+            </Box>,
+            version !== null && !isVersionOnTitle ? <Text dimColor>v{version}</Text> : null,
+          ])}
+          {waiting}
         </Box>
       </Box>,
     )
