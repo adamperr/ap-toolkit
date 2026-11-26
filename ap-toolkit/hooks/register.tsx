@@ -2326,6 +2326,17 @@ export const register: Register = (on, options) => {
     const projectColor = PROJECT_COLORS.find(c => c.key === project?.color)
     const remote = await read($, remoteA)
     const { Box, Button, Text } = $.ui.resolve(e)
+    // The Claude app draws each Button as its own button and drops a fill on the Text inside it, so there a filled
+    // Button sits on a Box that carries the fill. The terminal draws the fill on the Text as written.
+    const isApp = e.surface !== 'terminal'
+    const filled = (fill: string | undefined, button: RenderElement) =>
+      isApp && fill != null ? (
+        <Box backgroundColor={fill} flexShrink={0}>
+          {button}
+        </Box>
+      ) : (
+        button
+      )
 
     const isNarrow = e.props.bodyColumns < NARROW
     const takesEffort = takesEffortOf(hasEffort, noEffort, model)
@@ -3053,26 +3064,37 @@ export const register: Register = (on, options) => {
                 <Text dimColor>COLOR</Text>
               </Box>
               <Box gap={1} flexWrap="wrap" flexShrink={1}>
-                {PROJECT_COLORS.map(c => (
-                  <Button key={`color-${c.key}`} plain onPress={() => (c.key === project.color ? undefined : setProjectColor($, c.key))}>
+                {PROJECT_COLORS.map(c => {
+                  const swatch = (
                     <Text backgroundColor={c.hex} color="inverseText">
                       {c.key === project.color ? (cells === 2 ? '✓ ' : ' ✓ ') : cells === 2 ? '  ' : '   '}
                     </Text>
-                  </Button>
-                ))}
+                  )
+                  // In the app, the color in use is drawn as text, not a button, so its ✓ keeps its own color on the
+                  // fill. A press on it does nothing anyway.
+                  if (isApp && c.key === project.color) return swatch
+                  return filled(
+                    c.hex,
+                    <Button key={`color-${c.key}`} plain onPress={() => (c.key === project.color ? undefined : setProjectColor($, c.key))}>
+                      {swatch}
+                    </Button>,
+                  )
+                })}
                 {hasName ? <Text dimColor>{projectColor.label}</Text> : null}
               </Box>
             </Box>
           )
         : null
     // A model or effort: the one in use sits on a colored block.
-    const chip = (key: string, label: string, isPicked: boolean, color: string, onPress: () => void, isDim = false) => (
-      <Button key={key} plain dimColor={isDim} onPress={onPress}>
-        <Text backgroundColor={isPicked ? color : undefined} color={isPicked ? 'inverseText' : undefined}>
-          {` ${label} `}
-        </Text>
-      </Button>
-    )
+    const chip = (key: string, label: string, isPicked: boolean, color: string, onPress: () => void, isDim = false) =>
+      filled(
+        isPicked ? color : undefined,
+        <Button key={key} plain dimColor={isDim} onPress={onPress}>
+          <Text backgroundColor={isPicked ? color : undefined} color={isPicked ? 'inverseText' : undefined}>
+            {` ${label} `}
+          </Text>
+        </Button>,
+      )
     // A setting: its dot and name, then its pill. The pill is named for what a press does: Clean View's reads clean-off
     // while it's on. What each setting does is in Help.
     const setting = (name: string, short: string, isOn: boolean, key: string, pill: string, onPress: () => void) => (
@@ -3081,11 +3103,14 @@ export const register: Register = (on, options) => {
           <Text color={isOn ? 'success' : 'inactive'}>{isOn ? '●' : '○'} </Text>
           <Text>{isShortSettings ? short : name}</Text>
         </Text>
-        <Button key={key} plain onPress={onPress}>
-          <Text backgroundColor={isOn ? 'success' : 'subtle'} color={isOn ? 'inverseText' : 'text'}>
-            {` ${pill} `}
-          </Text>
-        </Button>
+        {filled(
+          isOn ? 'success' : 'subtle',
+          <Button key={key} plain onPress={onPress}>
+            <Text backgroundColor={isOn ? 'success' : 'subtle'} color={isOn ? 'inverseText' : 'text'}>
+              {` ${pill} `}
+            </Text>
+          </Button>,
+        )}
       </Box>
     )
     const clearLabel = !clearArmed ? 'Clear' : isShortLaunch ? 'Sure?' : 'Sure? Clear'
