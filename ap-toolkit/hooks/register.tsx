@@ -165,25 +165,26 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | **Model** | Switches Claude's model. A pick made while Claude works applies when it finishes. |
 | **Effort** | How hard Claude thinks. Grayed out on models that don't use it. |
 | **Color** | This project's color, marked ✓, on its name in the strip, on tabs **New tab** opens, and on its entry in Windows Terminal's menu. Each project gets one of 12 on its own, the one fewest projects have; press a swatch to change it. Other tabs open in this project change when they restart. Outside a project folder, it's the color of the folder Claude Code started in. |
-| **Time in the box** | The controls box's last row: this session's time. **Claude** is your requests from Enter to done, less the time Claude waited on your answers, which shows as **waited on you**. **helpers** adds up each helper's working time; helpers run side by side, so it can pass the clock. /clear starts it over. Today's report keeps helper time too. |
+| **Time in the box** | The controls box's **TIME** row: this session's time. **Claude** is your requests from Enter to done, less the time Claude waited on your answers, which shows as **waited on you**. **helpers** adds up each helper's working time; helpers run side by side, so it can pass the clock. /clear starts it over. Today's report keeps helper time too. |
 | **Terminal's menu** | Each project folder the toolkit has seen has an entry in the **∨** menu next to Windows Terminal's **+**. It opens a tab in that folder, named for the project and in its color, with Claude running. A new project or color shows after Terminal restarts. **Terminal menu** lists them all, to remove one or add it back. |
 | **Terminal menu** | Lists each project in Windows Terminal's **∨** menu, with **Remove** next to it. A removed project stays out of the menu, even when Claude starts there again, until you press **Add back**. Terminal shows a change the next time it starts. A project whose folder is gone leaves the menu by itself. |
 | **Helper agents** | Which model helper agents run on. Each press of its pill moves to the next: **Lowest that fits** lets Claude pick per task, **Fast & Cheap** uses Haiku, and **Same as me** uses Claude's own model. |
 | **Clean View** | Hides tool output (reads, edits, and commands), so Claude's words stand out. Questions and plans for your OK stay. The work view above the strip shows either way. |
 | **Remote Control** | Claude Code's own **Enable Remote Control for all sessions** setting. On, every tab you open from then on connects by itself, so you can pick up any session in the Claude app on your phone or at claude.ai/code, and this tab connects right away. A tab that was already open connects when it restarts. Off stops new tabs from connecting; a connected tab stays connected until you close it. While a session is connected, its conversation is stored on Anthropic's servers. Your PC must stay awake with the tab open. The row hides where Remote Control isn't available or your organization locks it. |
-| **On / Off pills** | Press the pill next to a setting to switch it. The dot beside the setting turns green while it's on. |
+| **On / Off pills** | Each setting sits in the box's right-hand column with its pill. Press the pill to switch it; it's green while on. |
 | **Start session** | Asks Claude to read the project map and tell you where things stand. |
 | **New tab** | Opens a Windows Terminal tab in this folder, named for the project and in its color, and starts a fresh Claude session there, with an empty box. Claude Code leaves that tab's name alone. Tabs you open yourself stay plain and read **Claude Code**. |
 | **Open project folder** | Opens this session's folder in File Explorer. |
 | **Today's report** | Claude's time, type of work, and usage by day, week, month, year, or all time. Also \`/report\`. A request that changed files counts as Building. Time Claude waits on your answers isn't counted as work. Work from before the toolkit started counting comes from past session files; its cost is estimated from tokens and model prices. Tokens and cost include helper agents. **API cost** is what the period's work would cost at API prices, which your plan doesn't bill, then the total since the toolkit's first day; each type of work shows its share, and the Year and All time tabs list each month with a running total. The estimate check line compares that estimate with Claude Code's own cost for past sessions. |
 | **Clear** | Starts a fresh conversation in this tab, with the same folder and model. Press it twice: the first press asks **Sure?** |
 | **Compact** | Claude summarizes the conversation so far and carries on from the summary, which frees up context. It reads the whole conversation once. A toast says when it's done. |
-| **▴ ▾** | **▴** at the right of the strip opens the controls box (model, effort, settings, Launch, and the session's time), and **▾** closes it. It remembers which. |
+| **▴ ▾** | **▴** at the right of the strip opens the controls box (model, effort, settings, launch buttons, and the session's time), and **▾** closes it. It remembers which. |
+| **Controls box** | Five rows: the title with the colors, then **MODEL** with **EFFORT**, **SESSION** with **CLEAN VIEW**, **TOOLS** with **HELPERS**, and **TIME** with **REMOTE**. Actions sit on the left; each setting sits in the right-hand column. In a narrow window or the Claude app, a row's setting wraps under its actions. While a model or effort switch waits, its note takes the Time row's left side. |
 | **Status row** | The end of the gray hint line under the prompt: model, effort, and helpers working. |
 | **"Needs you" alerts** | A Windows notification when Claude asks a question, wants a plan OK or a permission, or finishes a request that took 2 minutes or more. The title names the project, such as **ClaudeMods needs you**, or reads **Claude needs you** outside a project folder. Turn them off in \`/config\`. |
-| **⚠ Folder check** | Warns when a session starts outside a project folder (one with its own CLAUDE.md). **Got it** hides it for this session. |
+| **⚠ Folder check** | Warns when a session starts outside a project folder (one with its own CLAUDE.md). **Got it** hides it for this session. The Claude app's spare sessions, which wait in a folder of their own until you pick one, get no warning, name, or color; the check runs again when the session moves to its folder. |
 | **⚠ Wrap-up nudge** | Shows when context reaches 75% or the 5-hour limit reaches 85%, with **Compact** and **Clear**. **Not now** hides it until the reading drops and climbs back. It also shows when you come back after an hour away from a conversation over 50K tokens, since your next message rereads all of it at full price; **Not now** hides that one until your next hour away. |
-| **Version** | The dim number at the top right of the controls box, next to **?** and **▾** (at the end of the Launch row in a narrow window), such as v0.1.20: the second number is the major release, and the third is the batch in the project plan. A tab that shows an older number hasn't loaded the latest changes; restart it. |
+| **Version** | The dim number at the top right of the controls box, next to **?** and **▾** (at the end of the Tools row in a narrow window), such as v0.1.20: the second number is the major release, and the third is the batch in the project plan. A tab that shows an older number hasn't loaded the latest changes; restart it. |
 
 To change the report's hourly rate, open \`/config\`. Press **Esc** to close this help.`
 
@@ -285,6 +286,10 @@ const NARROW = 64
 const PANEL_FRAME = 4
 const LABEL_WIDTH = 7
 const GROUP_GAP = 2
+// The box's left labels (MODEL, SESSION, TOOLS, TIME) and the settings column's (EFFORT, CLEAN VIEW, HELPERS, REMOTE),
+// each with the space after it (Batch 58).
+const ROW_LABEL = 8
+const RIGHT_LABEL = 11
 
 // The box's title row: the title, and the cells the ? and ▾ buttons take with the gap between them.
 const TITLE = '◆ A P   T O O L K I T'
@@ -1701,8 +1706,23 @@ export function pickColor(taken: readonly string[]): string {
 export const folderText = (folder: string) =>
   `This session is outside a project folder (${folder}). Start Claude Code in the project's own folder so its rules and map load.`
 
-async function checkFolder($: EngineInterface) {
+// Whether a folder is one the Claude app made for a spare session, which it starts ahead of time and then moves into
+// the folder picked: `.claude\spares\spare-…` under the home folder (Batch 57).
+export const isSpareFolder = (dir: string) => /[\\/]\.claude[\\/]spares[\\/]spare-[^\\/]+[\\/]?$/i.test(dir)
+
+// The folder the folder check last looked at, so a session that moves gets checked again.
+let checkedCwd: string | null = null
+
+// A spare session has no folder of its own yet: no warning, no name or color, and the strip reads Session.
+async function clearFolder($: EngineInterface) {
+  await update($, folderWarningA, () => null)
+  await update($, projectA, () => null)
+}
+
+async function checkFolder($: EngineInterface, cwd: string) {
   try {
+    checkedCwd = cwd
+    if (isSpareFolder(cwd)) return await clearFolder($)
     const found = await $.fs.ancestors({ names: ['CLAUDE.md', '.claude/CLAUDE.md'] })
     const dir = projectDir(found, await $.env.get('USERPROFILE'))
     const folder = dir !== null ? null : await $.session.cwd()
@@ -1711,6 +1731,49 @@ async function checkFolder($: EngineInterface) {
     // Outside a project folder, the folder Claude Code started in still gets a name and color.
     if (dir !== null) await noteProject($, dir)
     else if (folder !== null) await noteProject($, folder, true)
+  } catch {}
+}
+
+// The nearest folder at or above `dir` with its own CLAUDE.md, leaving out the home folder and its .claude folder,
+// whose CLAUDE.md files are the global rules; null where there's none. The engine's own walk covers only the folder
+// the session started in, so a session that moved is walked here.
+async function projectDirAbove($: EngineInterface, dir: string, home: string | undefined): Promise<string | null> {
+  const isThere = (path: string) => $.fs.exists(path).catch(() => false)
+  const homeKey = (home ?? '').toLowerCase().replace(/[\\/]+$/, '')
+  const parts = dir.replace(/[\\/]+$/, '').split(/[\\/]+/)
+  for (let n = parts.length; n > 0; n--) {
+    const d = parts.slice(0, n).join('\\')
+    if (homeKey !== '' && (d.toLowerCase() === homeKey || d.toLowerCase() === `${homeKey}\\.claude`)) continue
+    if ((await isThere(`${d}\\CLAUDE.md`)) || (await isThere(`${d}\\.claude\\CLAUDE.md`))) return d
+  }
+  return null
+}
+
+// A session whose folder changed since the last check (the Claude app moving a spare session into the folder picked)
+// is checked again: its project's name and color, or the warning (Batch 57).
+async function recheckFolder($: EngineInterface) {
+  try {
+    if (checkedCwd === null) return
+    const cwd = await $.session.cwd()
+    if (cwd.toLowerCase() === checkedCwd.toLowerCase()) return
+    checkedCwd = cwd
+    if (isSpareFolder(cwd)) return await clearFolder($)
+    const dir = await projectDirAbove($, cwd, await $.env.get('USERPROFILE'))
+    await update($, folderWarningA, () => (dir === null ? cwd : null))
+    if (dir === null) $.ui.toast(folderText(cwd))
+    await noteProject($, dir ?? cwd, dir === null)
+  } catch {}
+}
+
+// Spare folders colored before Batch 57 leave the saved colors and folders, so they no longer count against the
+// colors new projects get (Adam OK'd, 2026-11-26).
+async function dropSpareFolders($: EngineInterface) {
+  try {
+    const keep = <T,>(o: Record<string, T>) => Object.fromEntries(Object.entries(o).filter(([k]) => !isSpareFolder(k)))
+    for (const key of ['projectColors', 'projectDirs']) {
+      const saved = ((await $.store.get(key)) ?? {}) as Record<string, unknown>
+      if (Object.keys(saved).some(isSpareFolder)) await $.store.set(key, keep(saved))
+    }
   } catch {}
 }
 
@@ -2024,7 +2087,8 @@ export const register: Register = (on, options) => {
     } catch {}
     await countHelpers($)
     await checkNudge($)
-    await checkFolder($)
+    await dropSpareFolders($)
+    await checkFolder($, e.cwd)
     try {
       await $.command.register({ name: 'report', description: "Open Today's report: time, type of work, and usage" })
       if ((await $.store.get('liveSince')) === undefined) await $.store.set('liveSince', await $.clock.now())
@@ -2094,6 +2158,8 @@ export const register: Register = (on, options) => {
       return next(e)
     }
     await clearWork($)
+    // A backstop for a folder move that came with no CwdChanged event.
+    await recheckFolder($)
     try {
       const now = await $.clock.now()
       // The report counts the session's cost from its first request here; what came before was counted elsewhere.
@@ -2404,21 +2470,41 @@ export const register: Register = (on, options) => {
     const nextHelper =
       HELPER_MODES[(HELPER_MODES.findIndex(m => m.key === helperMode) + 1) % HELPER_MODES.length]?.key ?? 'lowest'
     const helperLabel = HELPER_MODES.find(m => m.key === helperMode)?.[isNarrow ? 'short' : 'label'] ?? ''
-    // The settings' long names where all three fit on one row with their pills, else the short ones.
-    const settingCells = (name: string, pill: string) => 2 + name.length + 1 + pill.length + 2
-    const isShortSettings =
-      settingCells('Clean View', '○ Off') +
-        settingCells('Helper agents', helperLabel) +
-        (remote == null ? 0 : settingCells('Remote Control', '○ Off') + GROUP_GAP) +
-        GROUP_GAP >
-      inner
-    // Launch: the full names where the row fits them, then "Open folder", then the short names. Past that it wraps.
-    const freshCells = FRESH.reduce((n, f) => n + 2 + f.label.length, 0) + 2 * (FRESH.length - 1)
-    const fitsLaunch = (name: (l: Launch) => string) =>
-      LAUNCHES.reduce((n, l) => n + 2 + name(l).length + GROUP_GAP, 0) + freshCells <= inner
+    // The box's rows (Batch 58, docs\design\batch-58-box-layout-picks.html, C): actions on the left after a gray label,
+    // and on the right one setting per row, its label and control lined up in a column of fixed width: Model with
+    // Effort, Session with Clean View, Tools with Helpers, Time with Remote Control. Where the band can't hold both
+    // sides, a row's setting wraps under its actions. In the terminal the chips touch, their own padding between them.
+    const chipGap = isApp ? 1 : 0
+    const chipsWidth = (labels: string[]) => labels.reduce((n, t) => n + t.length + 2 + chipGap, -chipGap)
+    const fullModels = MODELS.map(m => m.label)
+    const fullEfforts = EFFORTS.map(x => x.chip ?? x.label)
+    const rightOf = (efforts: string[]) =>
+      RIGHT_LABEL + Math.max(chipsWidth(efforts), helperLabel.length + 2, '○ Off'.length + 2)
+    // Short chip names where the full ones don't leave room for both sides.
+    const isShortChips =
+      isNarrow || ROW_LABEL + chipsWidth(fullModels) + GROUP_GAP + rightOf(fullEfforts) > inner
+    const modelChips = isShortChips ? MODELS.map(m => m.short) : fullModels
+    const effortChips = isShortChips ? EFFORTS.map(x => x.short) : fullEfforts
+    const rightWidth = rightOf(effortChips)
+    const isSideBySide = ROW_LABEL + chipsWidth(modelChips) + GROUP_GAP + rightWidth <= inner
+    const leftRoom = isSideBySide ? inner - GROUP_GAP - rightWidth : inner
+    // A row's left side: its label and first group, then each group after a gap.
+    const leftWidth = (widths: number[]) => ROW_LABEL + widths.reduce((n, w) => n + w + GROUP_GAP, -GROUP_GAP)
+    const buttonCells = (label: string) => 2 + label.length
+    const sessionLaunches = LAUNCHES.filter(l => l.key === 'start' || l.key === 'tab')
+    const toolLaunches = LAUNCHES.filter(l => !sessionLaunches.includes(l))
+    const versionTail = version !== null && !isVersionOnTitle ? [`v${version}`.length] : []
+    // Tools: the full names where the row fits them, then "Open folder", then the short names. Past that it wraps.
+    const toolsWith = (name: (l: Launch) => string) => leftWidth([...toolLaunches.map(l => buttonCells(name(l))), ...versionTail])
     const midName = (l: Launch) => l.mid ?? l.label
-    const isShortLaunch = !fitsLaunch(midName)
-    const launchName: (l: Launch) => string = fitsLaunch(l => l.label) ? l => l.label : isShortLaunch ? l => l.short : midName
+    const toolName: (l: Launch) => string =
+      toolsWith(l => l.label) <= leftRoom ? l => l.label : toolsWith(midName) <= leftRoom ? midName : l => l.short
+    // Session: Start session, New tab, Clear, and Compact, short where the full names don't fit. A first press on
+    // Clear reads "Sure? Clear", or "Sure?" where that doesn't fit.
+    const sessionWith = (name: (l: Launch) => string, clear: string) =>
+      leftWidth([...sessionLaunches.map(l => buttonCells(name(l))), buttonCells(clear), buttonCells('Compact')])
+    const sessionName: (l: Launch) => string = sessionWith(l => l.label, 'Clear') <= leftRoom ? l => l.label : l => l.short
+    const clearLabel = !clearArmed ? 'Clear' : sessionWith(sessionName, 'Sure? Clear') <= leftRoom ? 'Sure? Clear' : 'Sure?'
     // The Time row (Batch 56): the session's time so far, counting the request and the helpers still working. A part
     // with nothing to show yet is left out, and so is the row until something has counted.
     const liveClaudeMs =
@@ -2434,41 +2520,31 @@ export const register: Register = (on, options) => {
     ]
       .map(p => ({ ...p, ms: p.ms - (p.ms % 1000) }))
       .filter(p => p.ms >= 1000)
-    const timeWidths = [...timeParts.map(p => `${p.label} ${duration(p.ms)}`.length), 'this session'.length]
-    // The rows the open box takes: its border and title, then each row of groups as it wraps at this width, the Color
-    // row where the colors leave the title, the Time row, and the "Switches to…" row while a switch waits.
-    const chipsCells = (labels: string[]) => LABEL_WIDTH + labels.reduce((n, t) => n + t.length + 3, -1)
+    const timeWidths = timeParts.map(p => `${p.label} ${duration(p.ms)}`.length)
+    // "this session" closes the Time row where it fits.
+    const hasThisSession = timeParts.length > 0 && leftWidth([...timeWidths, 'this session'.length]) <= leftRoom
+    // The Time row's left side: the "Switches to…" note while a switch waits, else the session's time, else nothing
+    // yet. The row shows when either side has something.
+    const pendingTarget =
+      pending == null
+        ? ''
+        : [pending.model ? modelLabel(pending.model) : '', pending.effort ? effortLabel(pending.effort) : ''].filter(Boolean).join(' · ')
+    const hasTimeRow = pending != null || timeParts.length > 0 || remote != null
+    // The rows the open box takes: its border and title, the Color row where the colors leave the title, then each row
+    // as its groups wrap at this width, with one more where its setting wraps under its actions.
+    const rowsOf = (widths: number[], hasRight: boolean) =>
+      packRows([ROW_LABEL + (widths[0] ?? 0), ...widths.slice(1)], GROUP_GAP, leftRoom) + (hasRight && !isSideBySide ? 1 : 0)
     const controlsRows =
       3 +
-      packRows(
-        [
-          chipsCells(MODELS.map(m => (isNarrow ? m.short : m.label))),
-          chipsCells(EFFORTS.map(x => (isNarrow ? x.short : (x.chip ?? x.label)))),
-        ],
-        GROUP_GAP,
-        inner,
-      ) +
       (project != null && projectColor && !isColorOnTitle ? 1 : 0) +
-      packRows(
-        [
-          settingCells('Clean View', '○ Off'),
-          settingCells(isShortSettings ? 'Helpers' : 'Helper agents', helperLabel),
-          ...(remote == null ? [] : [settingCells(isShortSettings ? 'Remote' : 'Remote Control', '○ Off')]),
-        ],
-        GROUP_GAP,
-        inner,
-      ) +
-      packRows(
-        [
-          ...LAUNCHES.map(l => 2 + launchName(l).length),
-          freshCells,
-          ...(version !== null && !isVersionOnTitle ? [`v${version}`.length] : []),
-        ],
-        GROUP_GAP,
-        inner,
-      ) +
-      (timeParts.length > 0 ? packRows(timeWidths, 3, inner - LABEL_WIDTH) : 0) +
-      (pending ? 1 : 0)
+      rowsOf([chipsWidth(modelChips)], true) +
+      rowsOf([...sessionLaunches.map(l => buttonCells(sessionName(l))), buttonCells(clearLabel), buttonCells('Compact')], true) +
+      rowsOf([...toolLaunches.map(l => buttonCells(toolName(l))), ...versionTail], true) +
+      (hasTimeRow
+        ? pending != null
+          ? 1 + (remote != null && !isSideBySide ? 1 : 0)
+          : rowsOf(hasThisSession ? [...timeWidths, 'this session'.length] : timeWidths, remote != null)
+        : 0)
 
     // The work view: while Claude works, Steps, Time, Now, then shells and helpers stack above the strip, each section
     // ending in a gray row; after the turn, one Done line folds them in until the next message. While the clock moves,
@@ -3126,17 +3202,12 @@ export const register: Register = (on, options) => {
       ? `${modelLabel(model)} doesn't use an effort setting.`
       : "This version of Claude Code doesn't have /effort."
 
-    let waiting = null
-    if (pending) {
-      const target = [pending.model ? modelLabel(pending.model) : '', pending.effort ? effortLabel(pending.effort) : '']
-        .filter(Boolean)
-        .join(' · ')
-      waiting = (
+    const waiting =
+      pending == null ? null : (
         <Text dimColor wrap="truncate-end">
-          {e.props.isWorking ? `Switches to ${target} when Claude finishes` : `Switching to ${target}…`}
+          {e.props.isWorking ? `Switches to ${pendingTarget} when Claude finishes` : `Switching to ${pendingTarget}…`}
         </Text>
       )
-    }
 
     // The full panel follows docs\design\batch-50-bar-layout-picks.html (A). Its widths and the rows it takes are
     // worked out above the work view, which leaves room for it.
@@ -3181,29 +3252,46 @@ export const register: Register = (on, options) => {
           </Text>
         </Button>,
       )
-    // A setting: its dot and name, then its pill. The pill is named for what a press does: Clean View's reads clean-off
-    // while it's on. What each setting does is in Help.
-    const setting = (name: string, short: string, isOn: boolean, key: string, pill: string, onPress: () => void) => (
-      <Box gap={1} flexShrink={0}>
-        <Text>
-          <Text color={isOn ? 'success' : 'inactive'}>{isOn ? '●' : '○'} </Text>
-          <Text>{isShortSettings ? short : name}</Text>
-        </Text>
-        {filled(
-          isOn ? 'success' : 'subtle',
-          <Button key={key} plain onPress={onPress}>
-            <Text backgroundColor={isOn ? 'success' : 'subtle'} color={isOn ? 'inverseText' : 'text'}>
-              {` ${pill} `}
-            </Text>
-          </Button>,
-        )}
+    // A setting's pill, green while it's on. Its key is named for what a press does: Clean View's reads clean-off while
+    // it's on. What each setting does is in Help.
+    const pill = (isOn: boolean, key: string, text: string, onPress: () => void) =>
+      filled(
+        isOn ? 'success' : 'subtle',
+        <Button key={key} plain onPress={onPress}>
+          <Text backgroundColor={isOn ? 'success' : 'subtle'} color={isOn ? 'inverseText' : 'text'}>
+            {` ${text} `}
+          </Text>
+        </Button>,
+      )
+    // A launch button: its icon in its color, then its name.
+    const launchButton = (key: string, icon: string, color: string, name: string, onPress: () => void) => (
+      <Box flexShrink={0}>
+        <Button key={`launch-${key}`} plain onPress={onPress}>
+          <Text color={color}>{icon}</Text> {name}
+        </Button>
       </Box>
     )
-    const clearLabel = !clearArmed ? 'Clear' : isShortLaunch ? 'Sure?' : 'Sure? Clear'
-    // A row of groups: spread across the row, each group whole, wrapping onto another row where they don't fit.
-    const groups = (children: (RenderElement | null)[]) => (
+    // One of the box's rows: the gray label and first group held together, the other groups after a gap, wrapping
+    // where they don't fit; then the setting on the right, its label and control in the fixed-width column.
+    const boxRow = (label: string, groups: (RenderElement | null)[], setting: { label: string; control: RenderElement } | null) => (
       <Box flexWrap="wrap" columnGap={GROUP_GAP} justifyContent="space-between">
-        {children}
+        <Box flexWrap="wrap" columnGap={GROUP_GAP} flexShrink={1}>
+          <Box flexShrink={0}>
+            <Box width={ROW_LABEL} flexShrink={0}>
+              <Text dimColor>{label}</Text>
+            </Box>
+            {groups[0] ?? null}
+          </Box>
+          {groups.slice(1)}
+        </Box>
+        {setting === null ? null : (
+          <Box width={rightWidth} flexShrink={0}>
+            <Box width={RIGHT_LABEL} flexShrink={0}>
+              <Text dimColor>{setting.label}</Text>
+            </Box>
+            {setting.control}
+          </Box>
+        )}
       </Box>
     )
 
@@ -3223,84 +3311,84 @@ export const register: Register = (on, options) => {
               <Button key="minimize" label="▾" plain onPress={() => setControlsOpen($, false)} />
             </Box>
           </Box>
-          {groups([
-            <Box flexShrink={0}>
-              <Box width={LABEL_WIDTH} flexShrink={0}>
-                <Text dimColor>MODEL</Text>
-              </Box>
-              <Box gap={1}>
-                {MODELS.map(m =>
-                  chip(`model-${m.key}`, isNarrow ? m.short : m.label, m.key === shownModel, 'claude', () =>
+          {boxRow(
+            'MODEL',
+            [
+              <Box gap={chipGap} flexShrink={0}>
+                {MODELS.map((m, i) =>
+                  chip(`model-${m.key}`, modelChips[i] ?? m.label, m.key === shownModel, 'claude', () =>
                     m.key === shownModel ? undefined : switchModel($, m.key),
                   ),
                 )}
-              </Box>
-            </Box>,
-            <Box flexShrink={0}>
-              <Box width={LABEL_WIDTH} flexShrink={0}>
-                <Text dimColor>EFFORT</Text>
-              </Box>
-              <Box gap={1}>
-                {EFFORTS.map(x =>
-                  chip(
-                    `effort-${x.key}`,
-                    isNarrow ? x.short : (x.chip ?? x.label),
-                    takesEffort && x.key === shownEffort,
-                    'permission',
-                    () =>
-                      !takesEffort ? $.ui.toast(whyNoEffort) : x.key === shownEffort ? undefined : switchEffort($, x.key),
-                    !takesEffort,
-                  ),
-                )}
-              </Box>
-            </Box>,
-          ])}
+              </Box>,
+            ],
+            {
+              label: 'EFFORT',
+              control: (
+                <Box gap={chipGap} flexShrink={0}>
+                  {EFFORTS.map((x, i) =>
+                    chip(
+                      `effort-${x.key}`,
+                      effortChips[i] ?? x.label,
+                      takesEffort && x.key === shownEffort,
+                      'permission',
+                      () =>
+                        !takesEffort ? $.ui.toast(whyNoEffort) : x.key === shownEffort ? undefined : switchEffort($, x.key),
+                      !takesEffort,
+                    ),
+                  )}
+                </Box>
+              ),
+            },
+          )}
           {colors !== null && !isColorOnTitle ? colors(isSlim ? 2 : 3, hasColorName) : null}
-          {groups([
-            setting('Clean View', 'Clean View', cleanView, cleanView ? 'clean-off' : 'clean-on', cleanView ? '● On' : '○ Off', () =>
-              setCleanView($, !cleanView),
-            ),
-            setting('Helper agents', 'Helpers', false, `helpers-${nextHelper}`, helperLabel, () => setHelperMode($, nextHelper)),
-            remote == null
-              ? null
-              : setting('Remote Control', 'Remote', remote, remote ? 'remote-off' : 'remote-on', remote ? '● On' : '○ Off', () =>
-                  setRemote($, !remote),
+          {boxRow(
+            'SESSION',
+            [
+              ...sessionLaunches.map(l => launchButton(l.key, l.icon, l.color, sessionName(l), () => launch($, l.key))),
+              ...FRESH.map(f =>
+                launchButton(f.key, f.icon, f.color, f.key === 'clear' ? clearLabel : f.label, () =>
+                  f.key === 'clear' ? pressClear($) : launch($, f.key),
                 ),
-          ])}
-          {groups([
-            ...LAUNCHES.map(l => (
-              <Box flexShrink={0}>
-                <Button key={`launch-${l.key}`} plain onPress={() => launch($, l.key)}>
-                  <Text color={l.color}>{l.icon}</Text> {launchName(l)}
-                </Button>
-              </Box>
-            )),
-            <Box flexShrink={0} gap={2}>
-              {FRESH.map(f => (
-                <Button key={`launch-${f.key}`} plain onPress={() => (f.key === 'clear' ? pressClear($) : launch($, f.key))}>
-                  <Text color={f.color}>{f.icon}</Text> {f.key === 'clear' ? clearLabel : f.label}
-                </Button>
-              ))}
-            </Box>,
-            version !== null && !isVersionOnTitle ? <Text dimColor>v{version}</Text> : null,
-          ])}
-          {timeParts.length > 0 ? (
-            <Box>
-              <Box width={LABEL_WIDTH} flexShrink={0}>
-                <Text dimColor>TIME</Text>
-              </Box>
-              <Box flexWrap="wrap" columnGap={3} flexShrink={1}>
-                {timeParts.map(p => (
-                  <Text>
-                    <Text dimColor>{p.label} </Text>
-                    {duration(p.ms)}
-                  </Text>
-                ))}
-                <Text dimColor>this session</Text>
-              </Box>
-            </Box>
-          ) : null}
-          {waiting}
+              ),
+            ],
+            {
+              label: 'CLEAN VIEW',
+              control: pill(cleanView, cleanView ? 'clean-off' : 'clean-on', cleanView ? '● On' : '○ Off', () =>
+                setCleanView($, !cleanView),
+              ),
+            },
+          )}
+          {boxRow(
+            'TOOLS',
+            [
+              ...toolLaunches.map(l => launchButton(l.key, l.icon, l.color, toolName(l), () => launch($, l.key))),
+              version !== null && !isVersionOnTitle ? <Text dimColor>v{version}</Text> : null,
+            ],
+            { label: 'HELPERS', control: pill(false, `helpers-${nextHelper}`, helperLabel, () => setHelperMode($, nextHelper)) },
+          )}
+          {hasTimeRow
+            ? boxRow(
+                timeParts.length > 0 && waiting === null ? 'TIME' : '',
+                waiting !== null
+                  ? [waiting]
+                  : [
+                      ...timeParts.map(p => (
+                        <Text>
+                          <Text dimColor>{p.label} </Text>
+                          {duration(p.ms)}
+                        </Text>
+                      )),
+                      hasThisSession ? <Text dimColor>this session</Text> : null,
+                    ],
+                remote == null
+                  ? null
+                  : {
+                      label: 'REMOTE',
+                      control: pill(remote, remote ? 'remote-off' : 'remote-on', remote ? '● On' : '○ Off', () => setRemote($, !remote)),
+                    },
+              )
+            : null}
         </Box>
       </Box>,
     )
@@ -3346,6 +3434,13 @@ export const register: Register = (on, options) => {
   })
 
   // Permission prompts and MCP questions get a "Needs you" alert too; the toolkit's own notices are left alone.
+  // The session's folder changed, as when the Claude app moves a spare session into the folder picked (Batch 57).
+  on('classic.CwdChanged', async ($, e, next) => {
+    const result = await next(e)
+    await recheckFolder($)
+    return result
+  })
+
   on('classic.Notification', async ($, e, next) => {
     const result = await next(e)
     if (isAlerting && ASKING_NOTICES.includes(e.notification_type)) alertLater($, e.message)
