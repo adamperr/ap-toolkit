@@ -148,8 +148,8 @@ const HELP = `**AP Toolkit** puts the things you'd otherwise type on buttons.
 | Row or button | What it does |
 | --- | --- |
 | **◆ Project name** | The strip's first line, above the prompt. It starts with this project's folder name, bold and in the project's color, or **Session** outside a project folder. Tokens are what Claude read new and wrote this session, helpers included; cache re-reads are left out, and Today's report still shows them. **At API prices** is Claude Code's own \`/cost\` figure: what the session would cost on the API, which your plan doesn't bill. **Context** is how full the conversation is. ◆ beats while Claude works. |
-| **Limits** | The strip's second line: how much of the 5-hour and weekly windows is left, and when each resets. When your pace would use up the 5-hour window before it resets, it says when, in amber. Where the line is short of room, the notes get shorter so both windows stay on one line. |
-| **While Claude works** | The strip folds to one line, so the work view gets a row back: the context bar (how full it is), then the 5-hour and week bars (how much is left). The cost, the token counts, and the reset times come back when Claude finishes. A pace warning turns the 5-hour figure amber until then. |
+| **Limits** | The strip's second line: how much of the 5-hour and weekly windows is left, and when each resets. When your pace would use up the 5-hour window before it resets, it says when, in amber, and still shows the reset time. Where the line is short of room, the notes get shorter so both windows stay on one line, and during a pace warning the week's reset time steps aside. |
+| **While Claude works** | The strip's first line keeps the session's tokens and cost and the model. Its second line holds the three bars together: the context bar (how full it is), then the 5-hour bar with its reset time and the week bar (how much is left). Context's token count and the week's reset time come back when Claude finishes. A pace warning turns the 5-hour figure amber until then. |
 | **Bars** | A bar fills as you use it, and its color says how full it is: green under 50%, amber from 50% to 79%, and red from 80%. That's the only color code. |
 | **Steps** | Shows above the strip while Claude works. The bar has one segment per step on Claude's to-do list: green when done, orange with a moving shine for the step it's on, and gray for what's left. With no to-do list, it reads **Working**. The step's clock turns amber after 3 minutes. On the right are this turn's tokens so far, as **in** (read new) and **out** (written), then its cost, helpers included. The checklist sits under it. |
 | **Time** | When you sent the message, how long Claude has worked, and when it should finish: the average finished step times the steps left. The estimate shows once a step finishes; without a to-do list, there's none. |
@@ -288,8 +288,8 @@ const TITLE_BUTTONS = 4
 // The strip above the prompt: its label column, the cells in each bar, and the eighths a bar's last cell fills by.
 const STRIP_LABEL = 11
 const METER = 8
-// While Claude works, the strip folds to one line (Batch 51), with bars this many cells wide and this many cells
-// between them, so the three fit beside the name and the model at 110 columns.
+// While Claude works, the three bars share the strip's second row (Batch 51 and 53), this many cells wide and this many
+// cells apart.
 const WORKING_METER = 6
 const GAUGE_GAP = 2
 const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
@@ -355,9 +355,20 @@ const hoursMinutes = (ms: number) => {
   return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`
 }
 
+// When a rate-limit window resets: "resets 3:10 PM", with the 5-hour countdown unless short, "reset at" once it has, or
+// nothing when the time isn't known.
+export function resetText(l: ToolkitLimit, now: number, isShort = false): string {
+  const reset = l.resetsAt === undefined ? NaN : Date.parse(l.resetsAt)
+  if (!Number.isFinite(reset)) return ''
+  if (reset <= now) return `reset at ${easternClock(reset, now)}`
+  const countdown = l.kind === 'five_hour' && !isShort ? ` (${hoursMinutes(reset - now)})` : ''
+  return `resets ${easternClock(reset, now)}${countdown}`
+}
+
 // A rate-limit window on the Limits line: how much is used (the bar), how much is left, and when it resets. When the
-// 5-hour window's pace so far would use it up before then, the note says when instead. The short notes drop "about",
-// "at this pace", and the 5-hour countdown, so both windows stay on one row.
+// 5-hour window's pace so far would use it up before then, the note says when instead, and the strip adds the reset
+// time after it (Batch 52). The short notes drop "about", "at this pace", and the 5-hour countdown, so both windows stay
+// on one row.
 export function limitText(
   l: ToolkitLimit,
   now: number,
@@ -365,7 +376,7 @@ export function limitText(
 ): { used: number; left: string; note: string; isPace: boolean } {
   const reset = l.resetsAt === undefined ? NaN : Date.parse(l.resetsAt)
   if (Number.isFinite(reset) && reset <= now) {
-    return { used: 0, left: '100% left', note: `reset at ${easternClock(reset, now)}`, isPace: false }
+    return { used: 0, left: '100% left', note: resetText(l, now, isShort), isPace: false }
   }
   const used = Math.max(0, l.percentUsed)
   const left = `${Math.max(0, Math.round(100 - used))}% left`
@@ -378,9 +389,7 @@ export function limitText(
       return { used, left, note: isShort ? `runs out ${clock}` : `runs out about ${clock} at this pace`, isPace: true }
     }
   }
-  const countdown = l.kind === 'five_hour' && !isShort ? ` (${hoursMinutes(reset - now)})` : ''
-  const note = `resets ${easternClock(reset, now)}${countdown}`
-  return { used, left, note, isPace: false }
+  return { used, left, note: resetText(l, now, isShort), isPace: false }
 }
 
 export type StatusParts = {
@@ -2674,19 +2683,22 @@ export const register: Register = (on, options) => {
           </Text>
         </Text>
       )
-    const limitPart = (label: string, l: ToolkitLimit) => {
+    // A pace warning keeps the reset time after it, dim (Batch 52). isNoteOut leaves the week's reset time out.
+    const limitPart = (label: string, l: ToolkitLimit, isNoteOut = false) => {
       const t = limitText(l, now, isShortLimits)
+      const then = t.isPace ? resetText(l, now, isShortLimits) : ''
       return (
         <Text wrap="truncate-end">
           <Text dimColor>{label} </Text>
           {blocks(tweened(`limit:${l.kind}`, t.used, now, isMoving))}
           <Text> {t.left}</Text>
-          {t.note ? (
+          {t.note && !isNoteOut ? (
             <Text color={t.isPace ? 'warning' : undefined} dimColor={!t.isPace}>
               {' '}
               · {t.note}
             </Text>
           ) : null}
+          {then ? <Text dimColor>{` · ${then}`}</Text> : null}
         </Text>
       )
     }
@@ -2701,26 +2713,35 @@ export const register: Register = (on, options) => {
             .length
     const modelWidth =
       `${modelLabel(model)}${takesEffort && effortLabel(effort) ? ` · ${effortLabel(effort)}` : ''}`.length + 2
-    const limitWidth = (name: string, l: ToolkitLimit, isShort: boolean) => {
+    const limitWidth = (name: string, l: ToolkitLimit, isShort: boolean, isNoteOut = false) => {
       const t = limitText(l, now, isShort)
-      return `${name} ${' '.repeat(METER)} ${t.left}${t.note ? ` · ${t.note}` : ''}`.length
+      const notes = [isNoteOut ? '' : t.note, t.isPace ? resetText(l, now, isShort) : ''].filter(Boolean)
+      return `${name} ${' '.repeat(METER)} ${t.left}${notes.map(n => ` · ${n}`).join('')}`.length
     }
-    const limitWidthsOf = (isShort: boolean) => [
+    const limitWidthsOf = (isShort: boolean, isWeekNoteOut = false) => [
       ...(fiveHourLimit === undefined ? [] : [limitWidth('5h', fiveHourLimit, isShort)]),
-      ...(weekLimit === undefined ? [] : [limitWidth('Week', weekLimit, isShort)]),
+      ...(weekLimit === undefined ? [] : [limitWidth('Week', weekLimit, isShort, isWeekNoteOut)]),
     ]
-    // The 5-hour and week windows share one row: where the full notes don't fit, the short ones do. Past that, in a
-    // narrow window, the week moves to a row of its own.
-    const isShortLimits =
-      limitWidthsOf(false).reduce((n, w) => n + w + 3, -3) > e.props.bodyColumns - STRIP_LABEL
-    const limitWidths = limitWidthsOf(isShortLimits)
+    // The 5-hour and week windows share one row: where the full notes don't fit, the short ones do. A pace warning
+    // keeps the 5-hour reset time, so while it shows, the week's reset time steps aside where the row is still short of
+    // room (Batch 52). Past that, in a narrow window, the week moves to a row of its own.
+    const limitRoom = e.props.bodyColumns - STRIP_LABEL
+    const rowWidth = (widths: number[]) => widths.reduce((n, w) => n + w + 3, -3)
+    const isShortLimits = rowWidth(limitWidthsOf(false)) > limitRoom
+    const isWeekNoteOut =
+      isShortLimits &&
+      fiveHourLimit !== undefined &&
+      limitText(fiveHourLimit, now, true).isPace &&
+      rowWidth(limitWidthsOf(true)) > limitRoom
+    const limitWidths = limitWidthsOf(isShortLimits, isWeekNoteOut)
     // Once the folder check has run, the project's name, bold and in its color, takes the place of "Session"; the
     // line's figures move right to make room.
     const sessionLabel = project != null && projectColor ? Math.max(STRIP_LABEL, project.name.length + 4) : STRIP_LABEL
-    // While Claude works (Batch 51), the strip folds to one line: the name, the three bars, and the model. Context reads
-    // how full it is, beside limits that read how much is left. The cost, the token counts, and the reset times come
-    // back when Claude finishes; a pace warning turns the 5-hour "left" amber until then.
-    const isOneLine = e.props.isWorking
+    // While Claude works, the three bars share the second row (Batch 51), under the session's tokens, cost, and model
+    // (Batch 53). Context reads how full it is, beside limits that read how much is left, and the 5-hour bar keeps its
+    // reset time (Batch 52). Context's token count and the week's reset time come back when Claude finishes; a pace
+    // warning turns the 5-hour "left" amber until then.
+    const isGaugeRow = e.props.isWorking
     // Before the first reply, one short note stands in for the bars that haven't come yet.
     const hasLimits = fiveHourLimit !== undefined || weekLimit !== undefined
     const waitNote =
@@ -2732,27 +2753,32 @@ export const register: Register = (on, options) => {
           ? null
           : '5h and Week show after first reply'
     const gaugeWidth = (name: string, text: string) => `${name} ${' '.repeat(WORKING_METER)} ${text}`.length
+    const fiveHourReset = fiveHourLimit === undefined ? '' : resetText(fiveHourLimit, now, true)
     const gaugeWidths = [
       ...(contextShown === null || usage === null ? [] : [gaugeWidth('Context', `${Math.round(contextShown)}% full`)]),
       ...(waitNote === null ? [] : [waitNote.length]),
-      ...(fiveHourLimit === undefined ? [] : [gaugeWidth('5h', limitText(fiveHourLimit, now, true).left)]),
+      ...(fiveHourLimit === undefined
+        ? []
+        : [gaugeWidth('5h', `${limitText(fiveHourLimit, now, true).left}${fiveHourReset ? ` · ${fiveHourReset}` : ''}`)]),
       ...(weekLimit === undefined ? [] : [gaugeWidth('Week', limitText(weekLimit, now, true).left)]),
     ]
     const lineRoom = e.props.bodyColumns - sessionLabel - modelWidth - 3
-    const stripRows = isOneLine
-      ? packRows(gaugeWidths, GAUGE_GAP, lineRoom)
+    const stripRows = isGaugeRow
+      ? packRows([sessionWidth], 3, lineRoom) + packRows(gaugeWidths, GAUGE_GAP, e.props.bodyColumns - STRIP_LABEL)
       : packRows([sessionWidth, contextWidth], 3, lineRoom) +
         packRows(limitWidths.length > 0 ? limitWidths : ['5h and Week show after first reply'.length], 3, e.props.bodyColumns - STRIP_LABEL)
-    const gauge = (label: string, percent: number, text: string, isWarn: boolean) => (
+    const gauge = (label: string, percent: number, text: string, isWarn: boolean, note = '') => (
       <Text wrap="truncate-end">
         <Text dimColor>{label} </Text>
         {blocks(percent, WORKING_METER)}
         <Text color={isWarn ? 'warning' : undefined}> {text}</Text>
+        {note ? <Text dimColor>{` · ${note}`}</Text> : null}
       </Text>
     )
     const limitGauge = (label: string, l: ToolkitLimit) => {
       const t = limitText(l, now, true)
-      return gauge(label, tweened(`limit:${l.kind}`, t.used, now, isMoving), t.left, t.isPace)
+      const note = l.kind === 'five_hour' ? fiveHourReset : ''
+      return gauge(label, tweened(`limit:${l.kind}`, t.used, now, isMoving), t.left, t.isPace, note)
     }
     const gauges = [
       contextShown === null || usage === null ? null : gauge('Context', contextShown, `${Math.round(contextShown)}% full`, false),
@@ -2782,18 +2808,14 @@ export const register: Register = (on, options) => {
                 )}
               </Text>
             </Box>
-            <Box flexWrap="wrap" columnGap={isOneLine ? GAUGE_GAP : 3} flexShrink={1}>
-              {isOneLine
-                ? gauges
-                : [
-                    <Text wrap="truncate-end">
-                      {amount(Math.round(tweened('tokens', sessionTokens, now, isMoving)))}
-                      <Text dimColor> tokens · </Text>
-                      {money(tweened('cost', usage?.costUsd ?? 0, now, isMoving))}
-                      <Text dimColor> at API prices</Text>
-                    </Text>,
-                    contextPart,
-                  ]}
+            <Box flexWrap="wrap" columnGap={3} flexShrink={1}>
+              <Text wrap="truncate-end">
+                {amount(Math.round(tweened('tokens', sessionTokens, now, isMoving)))}
+                <Text dimColor> tokens · </Text>
+                {money(tweened('cost', usage?.costUsd ?? 0, now, isMoving))}
+                <Text dimColor> at API prices</Text>
+              </Text>
+              {isGaugeRow ? null : contextPart}
             </Box>
           </Box>
           <Box flexShrink={0} gap={1}>
@@ -2813,7 +2835,14 @@ export const register: Register = (on, options) => {
             )}
           </Box>
         </Box>
-        {isOneLine ? null : (
+        {isGaugeRow ? (
+          <Box>
+            <Box width={STRIP_LABEL} flexShrink={0} />
+            <Box flexWrap="wrap" columnGap={GAUGE_GAP} flexShrink={1}>
+              {gauges}
+            </Box>
+          </Box>
+        ) : (
           <Box>
             <Box width={STRIP_LABEL} flexShrink={0}>
               <Text dimColor>{'  '}Limits</Text>
@@ -2825,7 +2854,7 @@ export const register: Register = (on, options) => {
                 </Text>
               ) : null}
               {fiveHourLimit !== undefined ? limitPart('5h', fiveHourLimit) : null}
-              {weekLimit !== undefined ? limitPart('Week', weekLimit) : null}
+              {weekLimit !== undefined ? limitPart('Week', weekLimit, isWeekNoteOut) : null}
             </Box>
           </Box>
         )}
